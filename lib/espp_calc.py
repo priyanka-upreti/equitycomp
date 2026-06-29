@@ -308,3 +308,357 @@ def _compute_progressive_tax(income: float, brackets) -> float:
         tax += (threshold - prev_threshold) * rate
         prev_threshold = threshold
     return tax
+
+
+# ---------------------------------------------------------------------------
+# Multi-purchase ESPP with cascading reset (NVIDIA / Apple style)
+# ---------------------------------------------------------------------------
+#
+# Real-world tech-company ESPP plans (e.g., NVIDIA, Apple) typically:
+# - Have a 2-year (24-month) offering period with 4 × 6-month purchase periods
+# - Apply a look-back to the offering-anchor FMV
+# - Auto-RESET the anchor if FMV at any purchase date drops below the current anchor
+# - Track the §423(b)(8) $25K limit PER CALENDAR YEAR cumulatively (multiple
+#   purchases in same year share the $25K bucket)
+#
+# Each purchase lot has its OWN effective offering anchor (post any resets),
+# its OWN holding-period clocks, and its OWN per-lot QD/DD determination at sale.
+
+
+@dataclass(frozen=True)
+class PurchaseInput:
+    """Inputs for a single purchase event within a multi-purchase offering."""
+
+    purchase_date: date
+    fmv_at_purchase: float  # per-share FMV on the purchase date
+    contributions: float  # contributions accumulated for this purchase period
+
+
+@dataclass(frozen=True)
+class PurchaseEvent:
+    """Outputs for a single purchase event."""
+
+    purchase_index: int  # 1-based index in the purchases list
+    purchase_date: date
+    fmv_at_purchase: float
+
+    # Effective offering anchor (may have moved due to a reset)
+    effective_anchor_date: date
+    effective_anchor_fmv: float
+    reset_occurred: bool  # True if THIS purchase triggered the anchor to move
+
+    # Purchase mechanics
+    reference_fmv: float  # min of (anchor, purchase FMV) when look-back; else purchase FMV
+    purchase_price: float
+    contributions: float
+
+    # Shares (with §423(b)(8) per-calendar-year cap applied)
+    shares_requested: float  # uncapped
+    shares_purchased: float  # post-cap
+    excess_contributions_refunded: float
+
+    # §423(b)(8) calendar-year accounting
+    calendar_year: int
+    ytd_fmv_used_before: float  # FMV value used in this year BEFORE this purchase
+    ytd_fmv_used_after: float  # FMV value used in this year AFTER this purchase
+
+    # Bargain element (becomes ordinary income if DD)
+    bargain_per_share: float
+    total_bargain: float
+
+
+@dataclass(frozen=True)
+class LotDisposition:
+    """Per-lot QD/DD analysis at sale."""
+
+    purchase_index: int
+    purchase_date: date
+    effective_anchor_date: date
+    shares_held: float
+
+    # Holding periods (measured from THIS lot's anchor + purchase dates)
+    days_anchor_to_sale: int
+    days_purchase_to_sale: int
+    holds_two_years_from_anchor: bool
+    holds_one_year_from_purchase: bool
+    disposition: Literal["QD", "DD"]
+
+    # Tax outcome for this lot (based on actual disposition)
+    ordinary_income: float
+    capital_gain: float
+    capital_loss: float
+
+
+@dataclass(frozen=True)
+class ESPPMultiInputs:
+    """Inputs for a multi-purchase §423 ESPP scenario with optional reset."""
+
+    offering_start_date: date
+    offering_start_fmv: float
+    discount_pct: float
+    has_lookback: bool
+    has_reset: bool  # cascading reset: anchor moves to any purchase-date FMV below current anchor
+    purchases: list[PurchaseInput]  # processed in chronological order as given
+    sale_date: date
+    sale_price: float
+
+
+@dataclass(frozen=True)
+class ESPPMultiOutputs:
+    """Aggregated outputs for a multi-purchase ESPP scenario."""
+
+    purchase_events: list[PurchaseEvent]
+    lot_dispositions: list[LotDisposition]
+
+    # Aggregated purchase totals
+    total_shares_purchased: float
+    total_contributions_applied: float  # contributions − refunds
+    total_refunded: float
+    total_bargain_at_purchase: float
+
+    # "What if" totals — what would tax look like if every lot were QD vs DD?
+    # (useful for comparison; the per-lot actual disposition is what counts)
+    qd_total_ordinary_income: float
+    qd_total_capital_gain: float
+    qd_total_capital_loss: float
+    dd_total_ordinary_income: float
+    dd_total_capital_gain: float
+    dd_total_capital_loss: float
+
+    # Actual aggregated tax (each lot uses its own disposition)
+    total_ordinary_income: float
+    total_capital_gain: float
+    total_capital_loss: float
+
+    # §423(b)(8) calendar-year usage summary
+    ytd_fmv_usage: dict[int, float]  # year → cumulative FMV value used
+
+    # Reset events for UI highlighting
+    reset_dates: list[date]
+
+
+def calculate_multi_purchase_espp(inputs: ESPPMultiInputs) -> ESPPMultiOutputs:
+    """Multi-purchase §423 ESPP with cascading reset + per-calendar-year limit.
+
+    Processes purchases in the order given. At each purchase:
+    1. If look-back + reset are enabled AND FMV_at_purchase < current anchor FMV:
+       reset the anchor (date + FMV) to this purchase event.
+    2. Compute reference FMV (min of anchor, purchase FMV) if look-back enabled.
+    3. Compute purchase price = reference FMV × (1 − discount).
+    4. Compute uncapped shares = contributions / purchase price.
+    5. Apply §423(b)(8) per-calendar-year cap: $25,000 of anchor-FMV value per year
+       per employee. Cumulative across purchases in same calendar year.
+       Excess shares are not purchased; the corresponding contributions are refunded.
+    6. Compute bargain element on the (capped) shares actually purchased.
+
+    At sale, each lot uses its own anchor + purchase dates for QD/DD holding clocks.
+    """
+
+    purchase_events: list[PurchaseEvent] = []
+    ytd_fmv_used: dict[int, float] = {}
+    reset_dates: list[date] = []
+
+    current_anchor_date = inputs.offering_start_date
+    current_anchor_fmv = inputs.offering_start_fmv
+
+    for idx, p in enumerate(inputs.purchases):
+        # --- Step 1: Reset check ---
+        if (
+            inputs.has_lookback
+            and inputs.has_reset
+            and p.fmv_at_purchase < current_anchor_fmv
+        ):
+            reset_occurred = True
+            current_anchor_date = p.purchase_date
+            current_anchor_fmv = p.fmv_at_purchase
+            reset_dates.append(p.purchase_date)
+        else:
+            reset_occurred = False
+
+        # --- Step 2: Reference FMV ---
+        if inputs.has_lookback:
+            reference_fmv = min(current_anchor_fmv, p.fmv_at_purchase)
+        else:
+            reference_fmv = p.fmv_at_purchase
+
+        # --- Step 3: Purchase price ---
+        purchase_price = reference_fmv * (1.0 - inputs.discount_pct)
+
+        # --- Step 4: Uncapped shares ---
+        shares_requested = (
+            p.contributions / purchase_price if purchase_price > 0 else 0.0
+        )
+
+        # --- Step 5: §423(b)(8) per-calendar-year cap ---
+        year = p.purchase_date.year
+        ytd_before = ytd_fmv_used.get(year, 0.0)
+        available_this_year = max(0.0, 25_000.0 - ytd_before)
+
+        if current_anchor_fmv > 0 and available_this_year > 0:
+            max_shares_this_year = available_this_year / current_anchor_fmv
+        else:
+            max_shares_this_year = 0.0
+
+        if shares_requested > max_shares_this_year:
+            shares_actual = max_shares_this_year
+            excess_shares = shares_requested - max_shares_this_year
+            excess_refund = excess_shares * purchase_price
+        else:
+            shares_actual = shares_requested
+            excess_refund = 0.0
+
+        ytd_after = ytd_before + (shares_actual * current_anchor_fmv)
+        ytd_fmv_used[year] = ytd_after
+
+        # --- Step 6: Bargain element on actual (capped) shares ---
+        bargain_per_share = max(0.0, p.fmv_at_purchase - purchase_price)
+        total_bargain = bargain_per_share * shares_actual
+
+        purchase_events.append(
+            PurchaseEvent(
+                purchase_index=idx + 1,
+                purchase_date=p.purchase_date,
+                fmv_at_purchase=p.fmv_at_purchase,
+                effective_anchor_date=current_anchor_date,
+                effective_anchor_fmv=current_anchor_fmv,
+                reset_occurred=reset_occurred,
+                reference_fmv=reference_fmv,
+                purchase_price=purchase_price,
+                contributions=p.contributions,
+                shares_requested=shares_requested,
+                shares_purchased=shares_actual,
+                excess_contributions_refunded=excess_refund,
+                calendar_year=year,
+                ytd_fmv_used_before=ytd_before,
+                ytd_fmv_used_after=ytd_after,
+                bargain_per_share=bargain_per_share,
+                total_bargain=total_bargain,
+            )
+        )
+
+    # --- Per-lot disposition analysis at sale ---
+    lot_dispositions: list[LotDisposition] = []
+    qd_oi_total = 0.0
+    qd_cg_total = 0.0
+    qd_cl_total = 0.0
+    dd_oi_total = 0.0
+    dd_cg_total = 0.0
+    dd_cl_total = 0.0
+    total_oi = 0.0
+    total_cg = 0.0
+    total_cl = 0.0
+
+    for pe in purchase_events:
+        if pe.shares_purchased <= 0:
+            continue  # skip empty lots
+
+        days_anchor_to_sale = (inputs.sale_date - pe.effective_anchor_date).days
+        days_purchase_to_sale = (inputs.sale_date - pe.purchase_date).days
+        holds_2yr = days_anchor_to_sale > 730
+        holds_1yr = days_purchase_to_sale > 365
+        is_qd = holds_2yr and holds_1yr
+
+        # QD math (always compute for "what if" comparison)
+        qd_oi_offering = pe.effective_anchor_fmv - pe.purchase_price
+        qd_oi_sale = inputs.sale_price - pe.purchase_price
+        if inputs.sale_price <= pe.purchase_price:
+            lot_qd_ordinary = 0.0
+        else:
+            lot_qd_ordinary = (
+                max(0.0, min(qd_oi_offering, qd_oi_sale)) * pe.shares_purchased
+            )
+        qd_proceeds = inputs.sale_price * pe.shares_purchased
+        qd_basis = (pe.purchase_price * pe.shares_purchased) + lot_qd_ordinary
+        qd_diff = qd_proceeds - qd_basis
+        lot_qd_cg = qd_diff if qd_diff >= 0 else 0.0
+        lot_qd_cl = -qd_diff if qd_diff < 0 else 0.0
+
+        # DD math (always compute for "what if" comparison)
+        lot_dd_ordinary = pe.total_bargain
+        dd_diff = (inputs.sale_price - pe.fmv_at_purchase) * pe.shares_purchased
+        lot_dd_cg = dd_diff if dd_diff > 0 else 0.0
+        lot_dd_cl = -dd_diff if dd_diff < 0 else 0.0
+
+        qd_oi_total += lot_qd_ordinary
+        qd_cg_total += lot_qd_cg
+        qd_cl_total += lot_qd_cl
+        dd_oi_total += lot_dd_ordinary
+        dd_cg_total += lot_dd_cg
+        dd_cl_total += lot_dd_cl
+
+        # Actual disposition
+        if is_qd:
+            disposition: Literal["QD", "DD"] = "QD"
+            lot_oi = lot_qd_ordinary
+            lot_cg = lot_qd_cg
+            lot_cl = lot_qd_cl
+        else:
+            disposition = "DD"
+            lot_oi = lot_dd_ordinary
+            lot_cg = lot_dd_cg
+            lot_cl = lot_dd_cl
+
+        total_oi += lot_oi
+        total_cg += lot_cg
+        total_cl += lot_cl
+
+        lot_dispositions.append(
+            LotDisposition(
+                purchase_index=pe.purchase_index,
+                purchase_date=pe.purchase_date,
+                effective_anchor_date=pe.effective_anchor_date,
+                shares_held=pe.shares_purchased,
+                days_anchor_to_sale=days_anchor_to_sale,
+                days_purchase_to_sale=days_purchase_to_sale,
+                holds_two_years_from_anchor=holds_2yr,
+                holds_one_year_from_purchase=holds_1yr,
+                disposition=disposition,
+                ordinary_income=lot_oi,
+                capital_gain=lot_cg,
+                capital_loss=lot_cl,
+            )
+        )
+
+    total_shares = sum(pe.shares_purchased for pe in purchase_events)
+    total_contrib_applied = sum(
+        pe.contributions - pe.excess_contributions_refunded for pe in purchase_events
+    )
+    total_refunded = sum(pe.excess_contributions_refunded for pe in purchase_events)
+    total_bargain = sum(pe.total_bargain for pe in purchase_events)
+
+    return ESPPMultiOutputs(
+        purchase_events=purchase_events,
+        lot_dispositions=lot_dispositions,
+        total_shares_purchased=total_shares,
+        total_contributions_applied=total_contrib_applied,
+        total_refunded=total_refunded,
+        total_bargain_at_purchase=total_bargain,
+        qd_total_ordinary_income=qd_oi_total,
+        qd_total_capital_gain=qd_cg_total,
+        qd_total_capital_loss=qd_cl_total,
+        dd_total_ordinary_income=dd_oi_total,
+        dd_total_capital_gain=dd_cg_total,
+        dd_total_capital_loss=dd_cl_total,
+        total_ordinary_income=total_oi,
+        total_capital_gain=total_cg,
+        total_capital_loss=total_cl,
+        ytd_fmv_usage=ytd_fmv_used,
+        reset_dates=reset_dates,
+    )
+
+
+def generate_purchase_dates(
+    offering_start: date,
+    num_purchases: int,
+    months_between_purchases: int = 6,
+) -> list[date]:
+    """Generate purchase dates spaced N months apart from the offering start.
+
+    Default 6-month spacing matches NVIDIA's typical 4 × 6-month structure.
+    """
+    from dateutil.relativedelta import relativedelta
+
+    return [
+        offering_start + relativedelta(months=i * months_between_purchases)
+        for i in range(1, num_purchases + 1)
+    ]
