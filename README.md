@@ -23,7 +23,7 @@ A multi-module interactive web app that helps employees + practitioners understa
 
 ## Why this exists
 
-Most equity comp calculations live in spreadsheets that are hard to share or verify. This is a public, free, open-source alternative that any employee can use to understand their own grants — and any practitioner can use as a quick reference. All math is validated against worked examples in the CEPI ECA Level 1 reference textbooks (Stock Options Book, Selected Issues, Consider Your Options, Equity Alternatives).
+Most equity comp calculations live in spreadsheets that are hard to share or verify. This is a public, free, open-source alternative that any employee can use to understand their own grants — and any practitioner can use as a quick reference. All math is validated against worked examples in the CEP reference textbooks (Stock Options Book, Selected Issues, Consider Your Options, Equity Alternatives).
 
 ## Disclaimer
 
