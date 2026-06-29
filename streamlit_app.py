@@ -106,7 +106,7 @@ st.markdown(
     """
 ### About
 
-**Built by:** Priyanka Upreti — CEPI ECA Level 1 candidate ([GitHub](https://github.com/priyanka-upreti/equitycomp))
+**Built by:** Priyanka Upreti — CEPI Equity Compensation Associate (ECA) Candidate ([GitHub](https://github.com/priyanka-upreti/equitycomp))
 
 **Validated against:** Stock Options Book (NCEO, 24th ed.), Consider Your Options (Kaye Thomas, 2019),
 Selected Issues in Equity Compensation (NCEO, 20th ed.), Equity Alternatives (NCEO, 21st ed.).
