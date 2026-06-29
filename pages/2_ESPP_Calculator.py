@@ -189,7 +189,7 @@ The look-back is most valuable when stock appreciates during the offering — yo
 
 st.header("📋 §423(b)(8) $25K Annual Limit")
 
-limit_col1, limit_col2, limit_col3 = st.columns(3)
+limit_col1, limit_col2, limit_col3, limit_col4 = st.columns(4)
 with limit_col1:
     st.metric(
         "Max shares allowed",
@@ -197,17 +197,37 @@ with limit_col1:
         help="$25,000 ÷ offering-date FMV (NOT purchase FMV, NOT actual price)",
     )
 with limit_col2:
-    st.metric("Shares being purchased", f"{result.shares_purchased:,.4f}")
+    st.metric(
+        "Shares requested",
+        f"{result.shares_requested:,.4f}",
+        help="What your contributions would buy at the purchase price (uncapped).",
+    )
 with limit_col3:
+    st.metric(
+        "Shares actually purchased",
+        f"{result.shares_purchased:,.4f}",
+        help="Capped at the §423(b)(8) limit — most plans enforce this automatically.",
+    )
+with limit_col4:
     if result.is_within_25k_limit:
         st.success("✅ Within limit")
     else:
-        st.error(f"❌ Over by {result.shares_over_limit:,.2f} shares")
+        st.error(f"❌ Capped — {result.shares_over_limit:,.2f} shares prevented")
+
+if not result.is_within_25k_limit:
+    st.warning(
+        f"💵 **${result.excess_contributions_refunded:,.2f}** in excess contributions "
+        f"will be refunded to you (most plans return un-applied payroll deferrals after "
+        f"the cap is hit). Bargain element, taxes, and capital gains below are computed "
+        f"on the **capped {result.shares_purchased:,.4f} shares** only."
+    )
 
 st.caption(
     "§423(b)(8) caps an employee's option-grant accrual at **$25,000 per calendar year** "
     "across all of the employer's §423 plans, measured at the **offering-date FMV**. "
-    "Excess shares are not §423-qualified — that portion of the discount is fully ordinary income."
+    "Most plans enforce this at purchase by refunding excess payroll contributions; some "
+    "plans allow excess purchases but those shares lose §423-qualified status (all "
+    "discount becomes ordinary income at purchase)."
 )
 
 # ---------------------------------------------------------------------------

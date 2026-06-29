@@ -80,8 +80,8 @@ def test_dd_same_day_sale():
     assert result.dd_capital_loss == pytest.approx(0.0)
 
 
-def test_25k_limit_exceeded():
-    """§423(b)(8) annual limit: 600 shares vs 500 allowed by $25K/offering FMV."""
+def test_25k_limit_caps_purchase_with_refund():
+    """§423(b)(8) cap: 600 shares requested → 500 actually purchased + $4,250 refunded."""
     inputs = ESPPInputs(
         offering_start_fmv=50.0,
         purchase_fmv=50.0,
@@ -91,14 +91,20 @@ def test_25k_limit_exceeded():
         purchase_date=date(2024, 6, 30),
         sale_date=date(2024, 6, 30),
         sale_price=50.0,
-        contributions=25_500.0,  # buys 600 shares at $42.50
+        contributions=25_500.0,  # would buy 600 at $42.50 — but capped at 500
     )
     result = calculate_espp_purchase(inputs)
 
-    assert result.shares_purchased == pytest.approx(600.0)
+    assert result.shares_requested == pytest.approx(600.0)  # uncapped (informational)
+    assert result.shares_purchased == pytest.approx(500.0)  # actually bought (capped)
     assert result.max_shares_under_25k_limit == pytest.approx(500.0)
     assert not result.is_within_25k_limit
     assert result.shares_over_limit == pytest.approx(100.0)
+    # 100 excess shares × $42.50 purchase price = $4,250 refunded to employee
+    assert result.excess_contributions_refunded == pytest.approx(4_250.0)
+    # Bargain element calculated on CAPPED shares only
+    # purchase FMV $50 − purchase price $42.50 = $7.50/share × 500 = $3,750
+    assert result.total_bargain_element == pytest.approx(3_750.0)
 
 
 def test_within_25k_limit():
@@ -116,10 +122,12 @@ def test_within_25k_limit():
     )
     result = calculate_espp_purchase(inputs)
 
+    assert result.shares_requested == pytest.approx(100.0)
     assert result.shares_purchased == pytest.approx(100.0)
     assert result.max_shares_under_25k_limit == pytest.approx(250.0)
     assert result.is_within_25k_limit
     assert result.shares_over_limit == pytest.approx(0.0)
+    assert result.excess_contributions_refunded == pytest.approx(0.0)
 
 
 def test_no_lookback_offering_above_purchase():

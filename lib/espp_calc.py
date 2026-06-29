@@ -53,14 +53,16 @@ class ESPPOutputs:
     # Purchase mechanics
     reference_fmv: float  # FMV used to set the discount (offering or purchase FMV)
     purchase_price_per_share: float  # actual per-share price employee pays
-    shares_purchased: float  # contributions / purchase_price_per_share (fractional OK)
+    shares_requested: float  # uncapped — what contributions would buy at purchase price
+    shares_purchased: float  # actually purchased — capped at §423(b)(8) limit
     bargain_element_per_share: float  # purchase_fmv − purchase_price (W-2 if DD)
     total_bargain_element: float
 
     # §423(b)(8) $25K annual limit
     max_shares_under_25k_limit: float  # 25000 / offering_start_fmv
-    is_within_25k_limit: bool
-    shares_over_limit: float
+    is_within_25k_limit: bool  # True if shares_requested <= max (no cap triggered)
+    shares_over_limit: float  # = shares_requested − shares_purchased (the excess prevented)
+    excess_contributions_refunded: float  # dollars NOT used to buy shares (refunded to employee)
 
     # Holding period analysis
     days_from_offering_start_to_sale: int
@@ -100,22 +102,33 @@ def calculate_espp_purchase(inputs: ESPPInputs) -> ESPPOutputs:
 
     purchase_price = reference_fmv * (1.0 - inputs.discount_pct)
 
-    # --- Shares purchased ---
-    shares = inputs.contributions / purchase_price if purchase_price > 0 else 0.0
-
-    # --- Bargain element at purchase (becomes W-2 ordinary income if DD) ---
-    bargain_per_share = max(0.0, inputs.purchase_fmv - purchase_price)
-    total_bargain = bargain_per_share * shares
+    # --- Shares requested (uncapped) ---
+    shares_requested = inputs.contributions / purchase_price if purchase_price > 0 else 0.0
 
     # --- §423(b)(8) $25K annual limit ---
-    # Limit uses OFFERING-DATE FMV (not purchase FMV, not actual purchase price)
+    # Limit uses OFFERING-DATE FMV (not purchase FMV, not actual purchase price).
+    # Most plans CAP purchases at the limit and refund excess contributions —
+    # rather than letting excess shares lose §423-qualified status.
     if inputs.offering_start_fmv > 0:
         max_shares_25k = 25_000.0 / inputs.offering_start_fmv
     else:
         max_shares_25k = 0.0
 
-    is_within_25k = shares <= max_shares_25k
-    shares_over_limit = max(0.0, shares - max_shares_25k)
+    if shares_requested > max_shares_25k:
+        shares = max_shares_25k
+        is_within_25k = False
+        shares_over_limit = shares_requested - max_shares_25k
+        excess_contributions_refunded = shares_over_limit * purchase_price
+    else:
+        shares = shares_requested
+        is_within_25k = True
+        shares_over_limit = 0.0
+        excess_contributions_refunded = 0.0
+
+    # --- Bargain element at purchase (becomes W-2 ordinary income if DD) ---
+    # Uses CAPPED shares — only shares actually owned generate a bargain element.
+    bargain_per_share = max(0.0, inputs.purchase_fmv - purchase_price)
+    total_bargain = bargain_per_share * shares
 
     # --- Holding period analysis ---
     days_offering_to_sale = (inputs.sale_date - inputs.offering_start_date).days
@@ -176,6 +189,7 @@ def calculate_espp_purchase(inputs: ESPPInputs) -> ESPPOutputs:
     # Ordinary income = full bargain at purchase, regardless of sale price
     dd_ordinary = total_bargain
     # Capital gain/loss = sale_price - purchase_fmv (basis stepped up via DD ordinary income)
+    # Uses CAPPED shares (only shares actually owned generate gain/loss)
     dd_gain_per_share = inputs.sale_price - inputs.purchase_fmv
     dd_total_gain = dd_gain_per_share * shares
 
@@ -194,12 +208,14 @@ def calculate_espp_purchase(inputs: ESPPInputs) -> ESPPOutputs:
     return ESPPOutputs(
         reference_fmv=reference_fmv,
         purchase_price_per_share=purchase_price,
+        shares_requested=shares_requested,
         shares_purchased=shares,
         bargain_element_per_share=bargain_per_share,
         total_bargain_element=total_bargain,
         max_shares_under_25k_limit=max_shares_25k,
         is_within_25k_limit=is_within_25k,
         shares_over_limit=shares_over_limit,
+        excess_contributions_refunded=excess_contributions_refunded,
         days_from_offering_start_to_sale=days_offering_to_sale,
         days_from_purchase_to_sale=days_purchase_to_sale,
         holds_two_years_from_offering=holds_two_years,
