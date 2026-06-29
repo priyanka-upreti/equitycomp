@@ -1,0 +1,5 @@
+streamlit>=1.58,<2
+numpy>=2.4,<3
+scipy>=1.17,<2
+pandas>=3.0,<4
+python-dateutil>=2.9,<3
