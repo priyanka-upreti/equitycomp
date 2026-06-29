@@ -48,7 +48,7 @@ with col_b:
 Model an **Employee Stock Purchase Plan** (§423) purchase.
 Includes look-back, $25K limit, and Qualifying vs Disqualifying Disposition math.
 
-**Coming soon**
+**Try it →** sidebar: *ESPP Calculator*
 """
     )
 
