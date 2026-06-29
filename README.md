@@ -2,9 +2,9 @@
 
 Open-source web app for equity compensation tax calculations.
 
-**Live demo:** [equitycomp.streamlit.app](https://equitycomp.streamlit.app)
-**Author:** Priyanka Upreti — CEPI Equity Compensation Associate (ECA) Candidate
-**Source:** [github.com/priyanka-upreti/equitycomp](https://github.com/priyanka-upreti/equitycomp)
+**Live demo:** [equitycomp.streamlit.app](https://equitycomp.streamlit.app)<br>
+**Author:** Priyanka Upreti — CEPI Equity Compensation Associate (ECA) Candidate<br>
+**Source:** [github.com/priyanka-upreti/equitycomp](https://github.com/priyanka-upreti/equitycomp)<br>
 **Subscribe:** [Equity Comp Gotchas newsletter on LinkedIn](https://www.linkedin.com/build-relation/newsletter-follow?entityUrn=7476698423992270848)
 
 ## What it does
