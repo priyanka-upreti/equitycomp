@@ -311,10 +311,10 @@ def _compute_progressive_tax(income: float, brackets) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Multi-purchase ESPP with cascading reset (NVIDIA / Apple style)
+# Multi-purchase ESPP with cascading reset (large-cap tech style)
 # ---------------------------------------------------------------------------
 #
-# Real-world tech-company ESPP plans (e.g., NVIDIA, Apple) typically:
+# Real-world large-cap tech ESPP plans typically:
 # - Have a 2-year (24-month) offering period with 4 × 6-month purchase periods
 # - Apply a look-back to the offering-anchor FMV
 # - Auto-RESET the anchor if FMV at any purchase date drops below the current anchor
@@ -654,7 +654,7 @@ def generate_purchase_dates(
 ) -> list[date]:
     """Generate purchase dates spaced N months apart from the offering start.
 
-    Default 6-month spacing matches NVIDIA's typical 4 × 6-month structure.
+    Default 6-month spacing matches the common 4 × 6-month structure at large-cap tech.
     """
     from dateutil.relativedelta import relativedelta
 

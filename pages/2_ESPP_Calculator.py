@@ -2,7 +2,7 @@
 
 Two modes:
 - Single purchase (V1): one offering period, one purchase, one sale
-- Multi-purchase with auto-reset (NVIDIA/Apple style): multiple purchases over a
+- Multi-purchase with auto-reset (large-cap tech style): multiple purchases over a
   2-year offering, cascading anchor reset when FMV drops, per-calendar-year
   §423(b)(8) $25K limit tracking, per-lot QD/DD at sale
 """
@@ -38,12 +38,12 @@ st.set_page_config(
 st.title("🛒 ESPP Calculator")
 st.markdown(
     "Model a **§423-qualified Employee Stock Purchase Plan**. Multi-purchase mode "
-    "covers NVIDIA / Apple-style plans with 2-year look-back, 4 × 6-month purchases, "
+    "covers large-cap tech-style plans with 2-year look-back, 4 × 6-month purchases, "
     "and automatic anchor reset when stock drops."
 )
 
 mode_multi = st.toggle(
-    "Multi-purchase plan with auto-reset (NVIDIA / Apple style)",
+    "Multi-purchase plan with auto-reset (large-cap tech style)",
     value=True,
     help="Toggle OFF for a single-purchase plan (simpler V1 UI).",
 )
@@ -87,7 +87,7 @@ if mode_multi:
             value=True,
             help="If FMV at any purchase date drops below the current anchor, "
             "the offering automatically restarts with the lower price as the "
-            "new anchor (NVIDIA/Apple-style).",
+            "new anchor (common in large-cap tech plans).",
         )
 
         st.divider()

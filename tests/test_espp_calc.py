@@ -300,7 +300,7 @@ def test_marginal_tax_zero_other_income():
 
 
 # ---------------------------------------------------------------------------
-# Multi-purchase ESPP scenarios (NVIDIA / Apple style)
+# Multi-purchase ESPP scenarios (large-cap tech style)
 # ---------------------------------------------------------------------------
 
 
