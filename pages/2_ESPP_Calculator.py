@@ -45,7 +45,7 @@ st.markdown(
 mode_multi = st.toggle(
     "Multi-purchase plan with auto-reset (large-cap tech style)",
     value=True,
-    help="Toggle OFF for a single-purchase plan (simpler V1 UI).",
+    help="Toggle OFF for a single-purchase plan.",
 )
 
 st.divider()
@@ -69,14 +69,15 @@ if mode_multi:
             step=0.01,
             format="%.2f",
         )
-        discount_pct = st.slider(
+        _discount_int = st.slider(
             "Discount % (max 15% per §423(b)(6))",
-            min_value=0.0,
-            max_value=0.15,
-            value=0.15,
-            step=0.01,
-            format="%.0f%%",
+            min_value=0,
+            max_value=15,
+            value=15,
+            step=1,
+            format="%d%%",
         )
+        discount_pct = _discount_int / 100.0
         has_lookback = st.checkbox(
             "Look-back feature",
             value=True,
@@ -385,14 +386,15 @@ else:
             step=0.01,
             format="%.2f",
         )
-        discount_pct = st.slider(
+        _discount_int = st.slider(
             "Discount % (max 15% per §423(b)(6))",
-            min_value=0.0,
-            max_value=0.15,
-            value=0.15,
-            step=0.01,
-            format="%.0f%%",
+            min_value=0,
+            max_value=15,
+            value=15,
+            step=1,
+            format="%d%%",
         )
+        discount_pct = _discount_int / 100.0
         has_lookback = st.checkbox(
             "Plan has look-back feature",
             value=True,
