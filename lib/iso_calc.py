@@ -170,40 +170,52 @@ def estimate_amt_due(
     """Rough estimate of AMT due from an ISO exercise.
 
     SIMPLIFIED: real AMT requires Form 6251 with many adjustments + preference items.
-    This function shows the magnitude using 2024/2025 thresholds — for planning only.
+    This function shows the magnitude using 2026 thresholds under the One Big
+    Beautiful Bill Act (OB3), Pub. L. No. 119-21 § 70107 (enacted July 4, 2025).
 
-    AMT exemption (2025; phaseout above thresholds):
-      - Single: $88,100 (phaseout starts $626,350; fully phased out $978,750)
-      - MFJ: $137,000 (phaseout starts $1,252,700; fully phased out $1,800,700)
+    OB3 materially changed AMT for 2026 tax year:
+      - Exemption Single: $90,100 (was $88,100 in 2025)
+      - Exemption MFJ: $140,800 (was $137,000 in 2025)*
+      - Phaseout begins Single: $500,000 (was $626,350 — LOWERED)
+      - Phaseout begins MFJ: $1,000,000 (was $1,252,700 — LOWERED)
+      - Phaseout RATE: 50% (was 25% — DOUBLED). Every $1 of AMTI over threshold
+        eliminates $0.50 of exemption instead of $0.25.
+      - Real effective AMT rate on income between phaseout endpoints: ~42%.
+
+    *MFJ exemption source disagreement: Consider Your Options 11th ed says $140,800;
+    Selected Issues 22nd ed says $140,200. Using $140,800; verify against IRS Form
+    6251 (2026) instructions before high-stakes decisions.
 
     AMT rates:
-      - 26% on first $232,600 of AMTI above exemption (2025)
+      - 26% on first $244,500 of AMTI above exemption (2026, unchanged breakpoint)
       - 28% above
 
     Returns dict with: amti, exemption, taxable_amti, tentative_amt, regular_tax, amt_due
     """
-    # 2025 figures
+    # 2026 figures under OB3 (Pub. L. No. 119-21 § 70107)
     if filing_status == "single":
-        exemption_base = 88_100
-        phaseout_start = 626_350
-        phaseout_end = 978_750
+        exemption_base = 90_100
+        phaseout_start = 500_000
+        # phaseout_end = 500,000 + (90,100 / 0.50) = 680,200
+        phaseout_end = 680_200
     else:  # mfj
-        exemption_base = 137_000
-        phaseout_start = 1_252_700
-        phaseout_end = 1_800_700
+        exemption_base = 140_800
+        phaseout_start = 1_000_000
+        # phaseout_end = 1,000,000 + (140,800 / 0.50) = 1,281,600
+        phaseout_end = 1_281_600
 
-    amt_bracket_break = 232_600  # 2025
+    amt_bracket_break = 244_500  # 2026
 
     # AMTI = ordinary income + ISO spread preference (simplified)
     amti = other_taxable_income + total_spread
 
-    # Exemption phaseout: $1 lost for every $4 over phaseout_start
+    # Exemption phaseout: $0.50 lost per $1 over phaseout_start (OB3 doubled from 25% → 50%)
     if amti <= phaseout_start:
         exemption = exemption_base
     elif amti >= phaseout_end:
         exemption = 0.0
     else:
-        reduction = (amti - phaseout_start) * 0.25
+        reduction = (amti - phaseout_start) * 0.50
         exemption = max(0.0, exemption_base - reduction)
 
     taxable_amti = max(0.0, amti - exemption)

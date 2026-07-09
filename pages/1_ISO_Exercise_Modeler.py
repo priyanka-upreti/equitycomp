@@ -187,7 +187,9 @@ with amt_cols[3]:
 
 st.caption(
     "⚠️ **Simplified estimate.** Actual AMT requires Form 6251 with all preference items + adjustments. "
-    "2025 thresholds used. Consult a tax professional before exercising large ISO positions."
+    "**2026 thresholds under OB3 (Pub. L. 119-21 § 70107, July 4, 2025)** — phaseout rate doubled to 50%, "
+    "MFJ exemption $140,800 (verify against IRS Form 6251 2026 instructions). "
+    "Consult a tax professional before exercising large ISO positions."
 )
 
 # ---------------------------------------------------------------------------

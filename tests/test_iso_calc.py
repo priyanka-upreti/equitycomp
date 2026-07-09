@@ -180,6 +180,7 @@ def test_atm_exercise_no_spread():
 
 
 def test_amt_estimation_large_spread():
+    """OB3 (2026): $200K spread + $200K other income at single filer, no phaseout."""
     result = estimate_amt_due(
         total_spread=200_000,
         other_taxable_income=200_000,
@@ -188,11 +189,11 @@ def test_amt_estimation_large_spread():
     )
 
     assert result["amti"] == 400_000
-    # Exemption phaseout starts at $626,350 → full exemption ($88,100) applies
-    assert result["exemption"] == 88_100
-    assert result["taxable_amti"] == pytest.approx(311_900)
-    # 26% × $232,600 + 28% × ($311,900 - $232,600)
-    expected_tentative = 232_600 * 0.26 + (311_900 - 232_600) * 0.28
+    # Exemption phaseout starts at $500,000 → full exemption ($90,100) applies at $400K
+    assert result["exemption"] == 90_100
+    assert result["taxable_amti"] == pytest.approx(309_900)
+    # 26% × $244,500 + 28% × ($309,900 - $244,500)  [2026 bracket break]
+    expected_tentative = 244_500 * 0.26 + (309_900 - 244_500) * 0.28
     assert result["tentative_amt"] == pytest.approx(expected_tentative, abs=1)
     assert result["amt_due"] == pytest.approx(expected_tentative - 50_000, abs=1)
 
@@ -206,10 +207,30 @@ def test_amt_estimation_small_spread_no_amt():
         regular_tax_estimate=15_000,
     )
 
-    # AMTI = $85,000; exemption $88,100; taxable AMTI = $0
+    # AMTI = $85,000; OB3 exemption $90,100; taxable AMTI = $0
     assert result["taxable_amti"] == 0
     assert result["tentative_amt"] == 0
     assert result["amt_due"] == 0
+
+
+def test_amt_estimation_ob3_phaseout_50pct():
+    """OB3 (2026) exemption phaseout kicks in at 50% rate above $500K single.
+
+    AMTI = $600K → $100K over phaseout threshold → $50K exemption lost (at 50% rate).
+    Exemption drops from $90,100 → $40,100. Under pre-OB3 25% rate, only $25K would
+    have been lost (exemption would still be $65,100).
+    """
+    result = estimate_amt_due(
+        total_spread=300_000,
+        other_taxable_income=300_000,
+        filing_status="single",
+        regular_tax_estimate=0,
+    )
+
+    assert result["amti"] == 600_000
+    # ($600K - $500K) × 0.50 = $50K lost from $90,100 → $40,100 exemption
+    assert result["exemption"] == pytest.approx(40_100)
+    assert result["taxable_amti"] == pytest.approx(559_900)
 
 
 if __name__ == "__main__":
