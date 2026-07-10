@@ -74,7 +74,7 @@ with col_d:
 Model an **RSU vest event** with sell-to-cover. Calculates net shares retained,
 withholding (federal supplemental + state + FICA), and cost basis tracking for sale.
 
-**Coming soon**
+**Try it →** sidebar: *RSU Vest Modeler*
 """
     )
 
