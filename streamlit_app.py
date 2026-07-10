@@ -57,9 +57,9 @@ with col_c:
     st.markdown(
         """
 Should you file a **§83(b) election** on your restricted stock?
-See net tax savings vs forfeiture risk, plus a sample election letter.
+See expected tax savings vs forfeiture risk, breakeven analysis, plus IRS Form 15620 filing guidance.
 
-**Coming soon**
+**Try it →** sidebar: *Section 83b Decision Tool*
 """
     )
 
