@@ -301,12 +301,27 @@ for note in threshold_notes:
 # ---------------------------------------------------------------------------
 
 if result.is_underwithheld:
+    # Suggest raising the elected rate closer to the marginal rate — capped at 37% max
+    current_elected_pct = int(round(elected_federal_supplemental_rate * 100))
+    target_pct = min(int(round(marginal_ordinary_rate * 100)), 37)
+    can_raise = target_pct > current_elected_pct
+
+    if can_raise:
+        increase_pct = target_pct - current_elected_pct
+        rate_suggestion = (
+            f"raising your elected federal supplemental rate by **{increase_pct}%** "
+            f"(from {current_elected_pct}% to {target_pct}%), "
+        )
+    else:
+        rate_suggestion = ""
+
     st.warning(
         f"⚠️ **Under-withheld by about \\${result.underwithheld_amount:,.0f}** — Your marginal "
         f"rate ({marginal_ordinary_rate * 100:.0f}%) exceeds the federal supplemental "
         f"rate applied ({result.federal_effective_rate * 100:.2f}%). You'll owe about "
         f"\\${result.underwithheld_amount:,.0f} more in federal tax at year-end. "
-        f"Consider making an estimated tax payment (Form 1040-ES) or increasing W-4 withholding."
+        f"Consider {rate_suggestion}making an estimated tax payment (Form 1040-ES), "
+        f"or increasing regular W-4 withholding."
     )
 
 # ---------------------------------------------------------------------------
