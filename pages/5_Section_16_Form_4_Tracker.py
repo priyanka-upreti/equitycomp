@@ -243,25 +243,48 @@ st.caption(
 
 if result.form4_filings:
     form4_rows = []
+    pre_insider_count = 0
     for f in result.form4_filings:
         txn = f.transaction
-        if f.is_overdue:
+        if f.is_pre_insider:
+            status = "ℹ️ Pre-insider (no Form 4 required)"
+            deadline_str = "—"
+            days_str = "—"
+            pre_insider_count += 1
+        elif f.is_overdue:
             status = "❌ Overdue"
-        elif f.days_until_deadline <= 2 and f.days_until_deadline >= 0:
+            deadline_str = f.deadline.isoformat()
+            days_str = str(f.days_until_deadline)
+        elif f.days_until_deadline is not None and 0 <= f.days_until_deadline <= 2:
             status = "⚠️ Due soon"
+            deadline_str = f.deadline.isoformat()
+            days_str = str(f.days_until_deadline)
         else:
             status = "✅ Not yet due"
+            deadline_str = f.deadline.isoformat()
+            days_str = str(f.days_until_deadline)
         form4_rows.append({
             "Txn date": txn.date.isoformat(),
             "Type": txn.transaction_type,
             "Shares": f"{txn.shares:,}",
             "Price": f"${txn.price_per_share:.2f}",
             "16b-3 Exempt": "✓" if txn.is_16b3_exempt else "",
-            "Form 4 deadline": f.deadline.isoformat(),
-            "Days until deadline": f.days_until_deadline,
+            "Form 4 deadline": deadline_str,
+            "Days until deadline": days_str,
             "Status": status,
         })
     st.dataframe(pd.DataFrame(form4_rows), use_container_width=True, hide_index=True)
+
+    if pre_insider_count > 0:
+        st.info(
+            f"ℹ️ **{pre_insider_count} pre-insider transaction(s) shown.** These pre-date "
+            f"your insider start ({insider_start_date.isoformat()}), so **no Form 4 filing "
+            f"was required.** They ARE disclosed as part of your beneficial ownership on "
+            f"**Form 3** (initial statement). Note: pre-insider purchases can still be "
+            f"caught in the **§16(b) short-swing analysis below** if matched with post-insider "
+            f"sales within 6 months (officer/director rule; stricter test for 10% holders per "
+            f"*Foremost-McKesson v. Provident Securities Co.*, 423 U.S. 232 (1976))."
+        )
 else:
     st.info("No transactions logged yet.")
 
@@ -323,6 +346,14 @@ with st.expander("📚 Statutory + regulatory references"):
 - Recovery is by the COMPANY (or shareholder acting derivatively), not by SEC
 - Two-year statute of limitations from the profit-taking transaction
 - Applies to all "equity securities" including options, RSUs (once matured), preferred stock
+
+### Pre-insider transactions + §16(b) — the tricky part
+- **Form 4:** No obligation to file for transactions dated before becoming an insider (§16(a) reporting duty starts with insider status)
+- **Form 3:** Discloses TOTAL beneficial ownership at insider start — includes shares from pre-insider transactions
+- **§16(b) matching:**
+  - **Officer/director:** SEC and courts have long swept pre-insider transactions into matching if within 6 months of a post-insider transaction. See discussion in *Foremost-McKesson v. Provident Securities Co.*, 423 U.S. 232 (1976).
+  - **10% shareholder:** BOTH sides of the matched pair must occur while person is a 10% holder (per *Foremost-McKesson*). Pre-10%-holder purchases are safe.
+  - This tool matches ALL non-exempt purchases and sales regardless of insider timing — conservative (may over-flag for 10% holders; under-inclusive vs. some edge cases). Apply legal judgment.
 
 ### Rule 16b-3 — Employee benefit plan exemption
 - Grants of options, restricted stock, RSUs from an approved comp plan are exempt from §16(b) matching if:

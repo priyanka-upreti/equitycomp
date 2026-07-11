@@ -60,12 +60,18 @@ class Section16Inputs:
 
 @dataclass(frozen=True)
 class Form4Filing:
-    """Form 4 deadline analysis for a single transaction."""
+    """Form 4 deadline analysis for a single transaction.
+
+    Pre-insider transactions (dated before insider_start_date) have no Form 4
+    obligation — deadline + days_until are None and is_pre_insider is True.
+    They still may appear in §16(b) short-swing matching for officers/directors.
+    """
 
     transaction: Transaction
-    deadline: date  # 2 business days after transaction date
-    days_until_deadline: int  # negative if overdue (as of as_of_date)
-    is_overdue: bool
+    deadline: Optional[date]  # None if pre-insider
+    days_until_deadline: Optional[int]  # None if pre-insider
+    is_overdue: bool  # always False if pre-insider
+    is_pre_insider: bool  # True if transaction date < insider_start_date
 
 
 @dataclass(frozen=True)
@@ -181,12 +187,27 @@ def analyze_section16(inputs: Section16Inputs) -> Section16Outputs:
     form3_days_remaining = (form3_deadline - inputs.as_of_date).days
     form3_is_overdue = form3_days_remaining < 0
 
-    # --- Form 4 filings (2 business days from each transaction) ---
+    # --- Form 4 filings (2 business days from each POST-INSIDER transaction) ---
+    # Pre-insider transactions have no Form 4 obligation (§16(a)(2)(C)) — reporting
+    # duty starts when insider status begins.
     form4_filings: list[Form4Filing] = []
     overdue_count = 0
     upcoming_count = 0
 
     for txn in inputs.transactions:
+        if txn.date < inputs.insider_start_date:
+            # Pre-insider — no Form 4 obligation
+            form4_filings.append(
+                Form4Filing(
+                    transaction=txn,
+                    deadline=None,
+                    days_until_deadline=None,
+                    is_overdue=False,
+                    is_pre_insider=True,
+                )
+            )
+            continue
+
         deadline = add_business_days(txn.date, 2)
         days_until = count_business_days_between(inputs.as_of_date, deadline)
         is_overdue = inputs.as_of_date > deadline
@@ -197,6 +218,7 @@ def analyze_section16(inputs: Section16Inputs) -> Section16Outputs:
                 deadline=deadline,
                 days_until_deadline=days_until,
                 is_overdue=is_overdue,
+                is_pre_insider=False,
             )
         )
         if is_overdue:
