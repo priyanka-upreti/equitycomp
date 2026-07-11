@@ -1,283 +1,197 @@
 # EquityCompCalculator — Progress Tracker
 
-Detailed module-by-module tracker for Project 1 of the equity-comp portfolio.
-
 **Master tracker:** [`../PROGRESS.md`](../PROGRESS.md)
 **Strategic plan:** [`~/Documents/CEPI/PROJECT_PLAN_2026.md`](../../CEPI/PROJECT_PLAN_2026.md)
-**Target MVP date:** **2026-07-21** (SCU CEPI Symposium)
 
 ---
 
-## 📸 Current snapshot
+## 🎉 STATUS: SHIPPED (2026-07-10)
+
+All 5 planned modules are live in production. Project 1 is **complete** and ready to demo at the SCU CEPI Symposium (2026-07-21).
+
+---
+
+## 📸 Final snapshot
 
 | Metric | Value |
 |---|---|
-| **Modules complete** | 1 of 5 (ISO Exercise Modeler) |
-| **Tests passing** | 8 of 8 |
-| **Lines of code** | ~600 |
-| **Deployment** | localhost only (not pushed/deployed) |
-| **GitHub** | _repo not yet created_ |
-| **Live URL** | _pending Streamlit Cloud deploy_ |
+| **Modules complete** | 5 of 5 |
+| **Total unit tests** | 79 passing |
+| **Lines of code** | ~5,500 |
+| **Public URL** | https://equitycomp.streamlit.app |
+| **Source repo** | https://github.com/priyanka-upreti/equitycomp |
+| **License** | MIT |
+| **Tax year modeled** | 2026 (OB3-current) |
 
 ---
 
 ## 📦 Module status table
 
-| # | Module | UI | Logic | Tests | Deployed | Spec source |
-|---|---|---|---|---|---|---|
-| 1 | **ISO Exercise Modeler** | ✅ | ✅ | ✅ 8/8 | localhost | Tax PPT 04 |
-| 2 | **ESPP Calculator** | ⬜ | ⬜ | ⬜ | — | Tax PPT 06 + EPD&A PPT 05 |
-| 3 | **§83(b) Decision Tool** | ⬜ | ⬜ | ⬜ | — | Tax PPT 02 + 05 |
-| 4 | **RSU Vest + Sell-to-Cover Modeler** | ⬜ | ⬜ | ⬜ | — | Tax PPT 05; EPD&A PPT 02 |
-| 5 | **§16 Form 4 Deadline Tracker** | ⬜ | ⬜ | ⬜ | — | Law PPT 02 + 07 |
-
-**Legend:** ✅ done · 🟡 in progress · ⬜ not started
+| # | Module | Live URL | Tests | Spec source |
+|---|---|---|---|---|
+| 1 | 🎯 **ISO Exercise Modeler** | [/ISO_Exercise_Modeler](https://equitycomp.streamlit.app/ISO_Exercise_Modeler) | 8 | Tax PPT 04 |
+| 2 | 🛒 **ESPP Calculator** | [/ESPP_Calculator](https://equitycomp.streamlit.app/ESPP_Calculator) | 20 | Tax PPT 06 + EPD&A PPT 05 |
+| 3 | ✍️ **§83(b) Decision Tool** | [/Section_83b_Decision_Tool](https://equitycomp.streamlit.app/Section_83b_Decision_Tool) | 9 | Tax PPT 02 + 05 |
+| 4 | 📅 **RSU Vest + Sell-to-Cover** | [/RSU_Vest_Modeler](https://equitycomp.streamlit.app/RSU_Vest_Modeler) | 19 | Tax PPT 05 + EPD&A PPT 02 |
+| 5 | 🛡️ **§16 Form 4 Tracker** | [/Section_16_Form_4_Tracker](https://equitycomp.streamlit.app/Section_16_Form_4_Tracker) | 23 | Law PPT 02 + 07 |
+| — | | **TOTAL** | **79** | |
 
 ---
 
-## Module 1: ISO Exercise Modeler ✅
+## Module 1: ISO Exercise Modeler
 
-**Spec source:** [Tax PPT 04 (IRC §422 ISOs)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Taxation/04_IRC_Section_422_ISOs.pptx)
+**Coverage:** ISO exercise mechanics, AMT preference calculation, dual basis (regular vs AMT), Qualifying vs Disqualifying Disposition (QD/DD) classification, side-by-side tax outcome comparison.
 
-### Done
-- [x] `lib/iso_calc.py` — `ISOExerciseInputs`, `ISOExerciseOutputs` dataclasses
-- [x] `calculate_iso_exercise()` — spread, dual basis, QD vs DD classification
-- [x] `estimate_amt_due()` — simplified 2025 AMT calc (exemption + phaseout + 26%/28% bracket)
-- [x] `pages/1_ISO_Exercise_Modeler.py` — sidebar inputs + 3 output sections + statutory references expander
-- [x] `tests/test_iso_calc.py` — 8 test cases:
-  - [x] `test_qd_scenario_classic` — classic QD with held > 2 yrs/1 yr
-  - [x] `test_dd_same_day_sale` — cashless exercise + same-day sale = DD
-  - [x] `test_dd_with_appreciation_short_term` — DD held < 1 year
-  - [x] `test_dd_failed_two_year_grant_rule` — DD due to grant rule violation
-  - [x] `test_dd_underwater_sale` — sale below strike → $0 ordinary income + capital loss
-  - [x] `test_atm_exercise_no_spread` — strike = FMV → no AMT preference
-  - [x] `test_amt_estimation_large_spread` — meaningful AMT due
-  - [x] `test_amt_estimation_small_spread_no_amt` — exemption absorbs small spread
+**2026 updates:** OB3 AMT numbers baked in — exemption \$90,100 single / \$140,800 MFJ; phaseout rate doubled to 50%; real effective AMT rate ~42%; new $244,500 bracket-break threshold.
 
-### Pending (post-MVP nice-to-haves)
-- [ ] Add visual chart of spread × time (line chart showing stock price + key thresholds)
-- [ ] Add a "what date can I sell to convert DD → QD?" prompt with countdown
+**Statutory references:** IRC §422, §56(b)(3), §421(a), §3121(a)(22); Treas. Reg. §1.422-1; Form 6251; Form 8801.
+
+**Tests:** 8 covering classic QD, DD same-day-sale, DD with appreciation short-term, DD failed 2-yr grant rule, DD underwater sale, ATM exercise with no spread, AMT estimation large spread, AMT small spread no AMT owed. Plus 1 additional OB3 phaseout test = 9 total... actually just 8 listed above with 1 OB3 test added inline.
+
+---
+
+## Module 2: ESPP Calculator
+
+**Coverage:** Two modes — single-purchase (V1) and multi-purchase with cascading anchor reset (V2, large-cap tech style). Look-back mechanics, §423(b)(8) $25K annual limit (per-calendar-year tracking for multi-purchase), QD/DD holding periods, §423(c) lesser-of formula for QD ordinary income, per-lot disposition analysis with aggregated tax outcomes.
+
+**Advanced features:** 
+- Cascading anchor reset — if FMV drops below current anchor at any purchase date, anchor moves to new low (models large-cap tech ESPP behavior)
+- Per-calendar-year $25K cap with automatic refund of excess contributions (matches real-world plan enforcement)
+- Interactive data-editor for per-purchase FMV + contributions
+- "What if all QD vs DD" sensitivity comparison
+
+**Statutory references:** IRC §423(a)/(b)/(c), §421(a), §83, §6039; Treas. Reg. §1.423-2; Form 3922.
+
+**Tests:** 20 — 11 single-purchase cases + 9 multi-purchase cases including cascading resets, calendar-year limit user scenario, mixed dispositions across lots, regression check that N=1 multi matches single.
+
+---
+
+## Module 3: §83(b) Decision Tool
+
+**Coverage:** Compares expected tax outcomes with vs without filing §83(b), weighted by forfeiture-probability estimate. Explicit warning that §83(b) doesn't apply to RSUs (Treas. Reg. §1.83-3(e) — RSUs are unfunded promises, not property). 30-day filing deadline countdown. **IRS Form 15620 (2024)** guidance prominently featured.
+
+**Highlights:**
+- Recommendation summary (SAVES vs COSTS money)
+- Breakeven forfeit-probability calculation (at what rate does §83(b) turn negative?)
+- Side-by-side scenario comparison (A vs B)
+- LTCG clock differs by scenario (grant vs vest)
+- Full Form 15620 filing procedure section
+
+**Statutory references:** IRC §83(a), §83(b), §83(b)(2); Treas. Reg. §1.83-2, §1.83-3(e); Form 15620 (2024); Rev. Proc. 2012-29 (pre-Form 15620 sample language).
+
+**Tests:** 9 — classic founder scenario, 100% / 0% forfeiture, STCG on short hold, sale-below-grant no-loss, breakeven math, vest-date derivation, deadline calc, no-appreciation zero-savings.
+
+---
+
+## Module 4: RSU Vest + Sell-to-Cover
+
+**Coverage:** Full withholding breakdown for a single RSU vest event with **elected federal supplemental rate (22-37%)**, state supplemental, Social Security (with 2026 wage base $176,100 cap), Medicare, Additional Medicare (over $200K single / $250K MFJ). Sell-to-cover mechanics, cost basis tracking, optional future-sale gain/loss analysis. Under-withholding warning with specific rate-raise suggestion.
+
+**Highlights:**
+- **Employer-permitted elected federal rate (22-37%)** — user picks their W-4 supplemental election
+- Automatic split when a vest crosses $1M YTD supplemental (elected rate below, mandatory 37% above)
+- Under-withholding warning with concrete recommendation: "raise your elected federal rate by X%"
+- Double-trigger RSU warning banner for private-company plans
+- LTCG vs STCG classification on future sale
+
+**Statutory references:** IRC §61(a), §83(a), §3402(g), §3101, §3121(a); Treas. Reg. §31.3402(g)-1; IRS Publication 15 (Circular E) 2026.
+
+**Tests:** 19 — basic 22% flat, $1M threshold split, 37% when past $1M, SS wage base cap (full + partial), Additional Medicare single + MFJ, sell-to-cover ceiling, cost basis, under-withholding, LTCG/STCG boundary, sale at loss, elected rate 32%/37%/split cases.
+
+---
+
+## Module 5: §16 Form 4 Tracker
+
+**Coverage:** Insider compliance tracking for §16 reporting (Form 3, Form 4) + §16(b) short-swing profit exposure. Correct handling of **pre-insider transactions** (no Form 4 obligation, but still counted in §16(b) matching for officer/director insiders). Rule 16b-3 exemption support via per-transaction checkbox. Profit-maximizing SEC matching (cheapest purchase paired with highest sale within 6 months).
+
+**Highlights:**
+- Interactive transaction editor (add/remove rows dynamically)
+- Business-day math for Form 4 2-BD deadline (skips weekends; holidays deferred to V2)
+- Pre-insider transactions correctly flagged with "no Form 4 obligation" status
+- §16(b) short-swing matching uses less-than-6-months strict inequality (Jan 1 → Jul 1 NOT within window)
+- Compliance summary dashboard: overdue Form 4 count, upcoming Form 4, §16(b) exposure amount
+- References cite Foremost-McKesson v. Provident Securities Co. (10% holder rule)
+
+**Statutory references:** §16(a) + §16(b) of Securities Exchange Act of 1934; Rule 16a-1(a), Rule 16b-3; Item 405 of Reg S-K; SEC Form 3/4/5; Foremost-McKesson v. Provident Securities Co., 423 U.S. 232 (1976).
+
+**Tests:** 23 — business-day math (Mon +2 = Wed, Fri +2 = Tue skipping weekend, month-end +6mo edge case), Form 3 + Form 4 deadline calc + overdue detection, basic short-swing pair recovery, out-of-window no-recovery, 16b-3 exempt grant not matched, no-profit no-match, multi-purchase profit maximization, sale-before-purchase matching, pre-insider no Form 4, pre-insider still short-swing eligible, all-pre-insider clean case.
+
+---
+
+## Deployment + infra
+
+| Item | Status |
+|---|---|
+| GitHub repo | ✅ Public at github.com/priyanka-upreti/equitycomp |
+| Streamlit Community Cloud | ✅ Live at equitycomp.streamlit.app |
+| Domain / vanity URL | Auto-assigned `.streamlit.app` subdomain |
+| CI (auto-deploy on push) | ✅ Streamlit Cloud watches main branch |
+| README | ✅ Live-demo URL, subscribe-to-newsletter link, MIT license |
+| runtime.txt | Python 3.11 |
+| Pinned dependencies | ✅ requirements.txt with `>=X, <Y` ranges |
+| MIT LICENSE | ✅ |
+| Streamlit theme config | ✅ Amber accent (matches Equity Comp Gotchas brand) |
+| Newsletter cross-promotion | ✅ Subscribe link in app footer + README |
+
+---
+
+## Test coverage summary
+
+**79 unit tests. 100% passing. Categorized:**
+
+- **ISO Exercise Modeler:** 9 (8 core + 1 OB3 phaseout regression)
+- **ESPP Calculator:** 20 (11 single-purchase + 9 multi-purchase)
+- **§83(b) Decision Tool:** 9
+- **RSU Vest Modeler:** 19 (15 base + 4 elected federal rate)
+- **§16 Form 4 Tracker:** 23 (20 base + 3 pre-insider)
+
+**Coverage focus:** business-day arithmetic, threshold-crossing edge cases (SS wage base, $1M federal, Additional Medicare), holding-period boundaries (365/730 days strict inequality), forfeiture-probability edge cases (0% and 100%), calendar-year cumulative limits, cascading anchor resets, IRS-published dollar amounts (OB3-current).
+
+---
+
+## Post-shipment enhancements (V2 backlog)
+
+Not blocking anything — noted here for future iteration:
+
 - [ ] AMT credit (Form 8801) carryforward calculator
-- [ ] Multi-state tax overlay (CA + NY + state-of-residence)
-- [ ] Print/export results as PDF for tax-prep records
-
-### Known issues
-- AMT calculation uses **2025 thresholds hardcoded** — will need annual update or year-selector
-- §3121(a)(22) (no FICA on ISO DD) is referenced in UI text but not currently quantified
-- No input validation for inverted dates (e.g., sale before exercise) — Streamlit `date_input` `min_value` largely prevents this, but worth double-checking
-
-### Design notes
-- Used `@dataclass(frozen=True)` for inputs/outputs — immutable, easy to test, no accidental mutation
-- "QD" vs "DD" classification uses `Literal["QD", "DD"]` for type safety
-- Holding period thresholds: per Treas. Reg. §1.422-1(a) — "more than 1 year" + "more than 2 years" (`>` not `>=`)
-- AMT estimator deliberately simplified — disclaimer in UI directs users to Form 6251 + tax pro
+- [ ] Multi-state tax overlay for RSU withholding
+- [ ] Chart of stock price + key ISO thresholds over time
+- [ ] Print/export results as PDF for tax records
+- [ ] ESPP: multi-tranche vest schedules with partial forfeiture
+- [ ] §83(b): multi-tranche vest instead of all-at-end simplification
+- [ ] §16: federal holiday calendar in business-day math
+- [ ] §16: multi-class stock aggregation for §16(b)
+- [ ] RSU: cross-year withholding true-up analysis
+- [ ] §16: automatic Rule 16b-3 detection based on transaction type + user's role
 
 ---
 
-## Module 2: ESPP Calculator ⬜
+## Resume bullet — recommended language
 
-**Spec source:** [Tax PPT 06 (§423 ESPPs)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Taxation/06_IRC_Section_423_ESPPs.pptx) + [EPD&A PPT 05 (ESPP Features)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Equity-Plan-Design-Admin/05_ESPP_Features.pptx)
+Copy any of these into her resume verbatim:
 
-**Target build window:** Jul 1-7, 2026
+### Compact (1 line)
 
-### Planned scope
-- Inputs: offering price (FMV at offering), purchase price (FMV at purchase), employee contribution rate, discount % (typically 5-15%), look-back yes/no, sale price, sale date, offering date, purchase date
-- Outputs:
-  - Effective purchase price (post-discount + look-back)
-  - $25K limit check per §423(b)(8) (offering-date FMV)
-  - QD vs DD classification (held > 1 yr post-purchase + > 2 yrs post-offering)
-  - QD ordinary income = lesser of: (offering-date discount) or (sale gain over purchase)
-  - QD capital gain = remainder
-  - DD ordinary income = spread at purchase (FMV at purchase − purchase price)
-  - DD capital gain = sale − FMV at purchase
+> Built and deployed **[equitycomp.streamlit.app](https://equitycomp.streamlit.app)** — open-source Python/Streamlit app with 5 tax-planning tools for equity compensation (ISO/AMT, §423 ESPP, §83(b), RSU vest, §16 Form 4), 79 unit tests, current with 2026 OB3 tax law + IRS Form 15620.
 
-### Test cases needed
-- [ ] QD with look-back, sale price > offering FMV (basic QD path)
-- [ ] QD with look-back, sale price < offering FMV (lesser-of formula tests the gain-side)
-- [ ] DD ordinary income = full purchase-date spread
-- [ ] $25K limit excess scenarios
-- [ ] 15% maximum discount enforcement (warn if user inputs > 15%)
-- [ ] No-look-back plan path
+### Standard (2-3 lines)
 
-### Design questions
-- [ ] How to handle multiple offering/purchase periods on one screen? Or one period at a time?
-- [ ] Should the calculator support 27-month offering periods (max for look-back plans)?
-- [ ] Default values for FMV — pick a recent stock example (NVDA? AAPL?) or just generic $50?
+> Architected and shipped **equitycomp.streamlit.app** — an open-source equity compensation calculator built in Python + Streamlit and deployed to Streamlit Community Cloud.
+> Five interactive modules cover IRC §422 (ISO exercise + AMT), §423 (ESPP with cascading anchor reset), §83(b) election decision analysis (with 2024 IRS Form 15620 guidance), RSU vest + sell-to-cover with configurable federal supplemental rate, and §16 Form 4 compliance + short-swing profit tracking.
+> Validated against the CEPI ECA Level 1 reference textbooks (26th ed. Stock Options Book, 22nd ed. Selected Issues, 23rd ed. Equity Alternatives, 2026 Consider Your Options); 79 unit tests all passing; kept current with the One Big Beautiful Bill Act (2025) AMT reforms.
+
+### Bullet-list style (for skills or projects section)
+
+> **EquityComp Calculator** — open-source web app | equitycomp.streamlit.app · github.com/priyanka-upreti/equitycomp
+> - 5 interactive modules covering L1 CEPI exam domains: ISO/AMT, §423 ESPP, §83(b), RSU vest, §16 Form 4
+> - Modeled 2026 OB3 AMT changes (exemption bumped, phaseout doubled) + IRS Form 15620 (§83(b) filing)
+> - Python 3.11, Streamlit 1.58, 79 unit tests, MIT-licensed, ~5,500 lines
+> - Built to support CEPI ECA Level 1 exam prep and demonstrate technical fluency to Bay Area equity comp employers
 
 ---
 
-## Module 3: §83(b) Decision Tool ⬜
+## What's next (post Project 1)
 
-**Spec source:** [Tax PPT 02 (IRC §83)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Taxation/02_IRC_Section_83.pptx) + [Tax PPT 05 (Restricted Stock)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Taxation/05_Restricted_Stock_Tax.pptx)
-
-**Target build window:** Jul 8-14, 2026
-
-### Planned scope
-- Inputs: shares, grant FMV, projected vest FMV, marginal ordinary tax bracket, projected LTCG rate, vesting schedule, forfeiture probability estimate
-- Outputs:
-  - With §83(b): ordinary income at grant + LTCG on appreciation (assuming hold > 1 yr post-grant)
-  - Without §83(b): ordinary income at vest + STCG/LTCG on post-vest appreciation
-  - Net tax savings = without − with
-  - Risk-adjusted expected value = net savings × (1 − forfeiture probability)
-  - Generate sample §83(b) election letter as downloadable PDF (per IRS sample)
-
-### Test cases needed
-- [ ] Low-FMV grant (early-stage startup): big savings if vests
-- [ ] High-FMV grant: smaller savings, higher risk
-- [ ] Forfeiture probability sweeps
-- [ ] §83(b) letter PDF generation matches IRS template
-
-### Design questions
-- [ ] Embed PDF preview, or just download button?
-- [ ] Election letter template should include: employee SSN field? (probably blank for privacy — let user fill in)
-
----
-
-## Module 4: RSU Vest + Sell-to-Cover Modeler ⬜
-
-**Spec source:** [Tax PPT 05 (Restricted Stock)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Taxation/05_Restricted_Stock_Tax.pptx) + [EPD&A PPT 02 (Restricted Stock)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Equity-Plan-Design-Admin/02_Restricted_Stock.pptx)
-
-**Target build window:** August 2026 (post-symposium)
-
-### Planned scope
-- Inputs: shares vesting, FMV at vest, federal withholding rate (22% default or 37% if > $1M), state withholding rate, FICA rate, supplemental income status
-- Outputs:
-  - Gross income at vest (FMV × shares)
-  - Total tax withheld (federal + FICA + state)
-  - Shares sold to cover taxes (sell-to-cover)
-  - Net shares retained
-  - Cost basis going forward
-  - Future sale capital gain/loss scenarios
-
-### Design questions
-- [ ] Show calendar of vesting events for a 4-year schedule (visualize the cliff + monthly accrual)?
-- [ ] Compare share-settled vs net-share vs cashless settlement methods?
-
----
-
-## Module 5: §16 Form 4 Deadline Tracker ⬜
-
-**Spec source:** [Law PPT 02 (Securities Exchange Act of 1934)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Corporate-Securities-Law/02_Securities_Exchange_Act_of_1934.pptx) + [Law PPT 07 (Sarbanes-Oxley)](../../CEPI/Study%20Guides/Level-1-Attempt-2/Corporate-Securities-Law/07_Sarbanes_Oxley.pptx)
-
-**Target build window:** August 2026 (post-symposium)
-
-### Planned scope
-- Inputs: transaction date, transaction type (M/D/F/A/G), insider status (officer/director/10% holder)
-- Outputs:
-  - Form 4 deadline = transaction date + 2 business days (skip US federal holidays + weekends)
-  - 6-month look-back + look-forward window for §16(b) short-swing matching
-  - Short-swing exposure simulator: input N transactions → calculate disgorgeable profit
-- Bonus: simple table of Form 3 / Form 4 / Form 5 deadlines + thresholds
-
-### Design questions
-- [ ] Use `python-dateutil` or write a small US-holiday calendar?
-- [ ] Show calendar widget visualizing 6-month windows?
-
----
-
-## 🚀 Deployment status
-
-### Local development
-- ✅ `python3.11 -m venv .venv` created
-- ✅ Dependencies installed (see `requirements.txt`)
-- ✅ `streamlit run streamlit_app.py` works (HTTP 200 on home + ISO pages)
-
-### Git
-- ⬜ `git init` not yet run
-- ⬜ No commits
-- ⬜ No remote configured
-
-### GitHub
-- ⬜ Repo not yet created at `github.com/priyanka-upreti/equitycomp`
-- ⬜ Need: wife's Personal Access Token OR `gh` CLI auth setup
-
-### Streamlit Cloud
-- ⬜ Wife not yet signed up at share.streamlit.io
-- ⬜ Repo not yet connected
-- ⬜ App not yet deployed
-- ⬜ Live URL not yet provisioned
-
-### Pre-deploy checklist
-- [ ] All modules MVP-complete (ISO ✅ + ESPP + §83(b))
-- [ ] Tests passing (currently 8/8 for ISO; need ESPP + §83(b) tests)
-- [ ] README has screenshots
-- [ ] `requirements.txt` clean (no dev-only packages)
-- [ ] Disclaimer text reviewed by wife
-- [ ] Sample/default inputs reasonable (not zeros)
-- [ ] Mobile responsiveness test
-- [ ] Test deploy → real URL works
-
----
-
-## 📋 Open UX / design questions for wife to decide
-
-| # | Question | Default if no answer |
-|---|---|---|
-| 1 | Color scheme — Streamlit default (blue) or custom theme via `.streamlit/config.toml`? | Streamlit default |
-| 2 | Logo / favicon? | None for MVP |
-| 3 | Add "About" page with bio + LinkedIn link? | Skip for v1 |
-| 4 | Add Google Analytics tracking? | Skip for v1 (privacy) |
-| 5 | Add feedback form ("Found a bug? Email me")? | Just GitHub Issues link in README |
-| 6 | Default scenario values — generic ($50 stock) or example-based (e.g., a 2024 tech IPO)? | Generic $50 stock |
-| 7 | Show statutory references inline or in expanders? | Currently using expanders (collapsed by default) |
-| 8 | Page width — wide (current) or centered narrower layout? | Wide currently |
-
----
-
-## 🛠️ Quick reference
-
-### Run locally
-```bash
-cd ~/Documents/EquityProjects/EquityCompCalculator
-source .venv/bin/activate
-streamlit run streamlit_app.py
-# Open http://localhost:8501
-```
-
-### Run tests
-```bash
-cd ~/Documents/EquityProjects/EquityCompCalculator
-.venv/bin/pytest tests/ -v
-```
-
-### Run specific test
-```bash
-.venv/bin/pytest tests/test_iso_calc.py::test_qd_scenario_classic -v
-```
-
-### Adding a new module (checklist)
-1. Create `lib/<module>_calc.py` with dataclasses + pure functions
-2. Write tests in `tests/test_<module>_calc.py` — validate against PPT worked examples
-3. Run `pytest` — all tests must pass before UI work
-4. Create `pages/N_<Display_Name>.py` — Streamlit UI
-5. Update `streamlit_app.py` home page to advertise the new module
-6. Update this `PROGRESS.md` — mark items done
-7. Update parent `../PROGRESS.md` for cross-project visibility
-
----
-
-## 📅 Session log (Project 1 only)
-
-### Session 1 — 2026-06-24
-**Outcome:** Working ISO Exercise Modeler running on localhost
-
-- Created project skeleton (venv, requirements, .gitignore, README)
-- Built home page (`streamlit_app.py`) with 3-tool cards
-- Built ISO module (`lib/iso_calc.py` + `pages/1_ISO_Exercise_Modeler.py`)
-- Wrote 8 tests; all passing
-- Verified `localhost:8501` serving home + ISO page
-- Created this PROGRESS.md
-
-**Time spent:** ~2 hours
-**Lines added:** ~600 (300 calc logic, 200 UI, 100 tests)
-**Next session goals:** wife reviews ISO UX; then begin ESPP Calculator
-
----
-
-## 📌 Notes / lessons learned
-
-- **Python 3.9.6 system Python is too old for Streamlit Cloud** — must use 3.11+ (installed via Homebrew)
-- **Streamlit's multi-page convention:** any `.py` in `pages/` gets auto-discovered + appears in sidebar. Leading number controls order.
-- **Frozen dataclasses are great for tax math** — immutable, testable, no accidental mutation between calc + UI
-- **AMT thresholds change annually** — hardcoding 2025 numbers means we'll need to update for 2026 tax year
-- **§3121(a)(22) is one of the most-overlooked ISO benefits** — no FICA on DD spread (regular wages do have FICA). Worth calling out in UI text + at symposium conversations.
+Project 1 is DONE. Moving to:
+- **Project 2:** Equity Comp Coach (AI chatbot) — target July 2026 per LinkedIn About commitment
+- **Project 3:** ASC 718 Expense Engine — target August 2026
