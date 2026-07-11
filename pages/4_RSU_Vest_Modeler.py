@@ -74,6 +74,19 @@ with st.sidebar:
 
     st.divider()
     st.header("💰 Withholding Rates")
+    fed_rate_int = st.slider(
+        "Elected federal supplemental rate (%)",
+        min_value=22,
+        max_value=37,
+        value=22,
+        step=1,
+        format="%d%%",
+        help="IRS default is 22% (§31.3402(g)-1). Some employers let employees elect "
+        "a higher rate up to 37%. Once YTD supplemental exceeds \\$1M, the rate is "
+        "MANDATORILY 37% and the election is overridden.",
+    )
+    elected_federal_supplemental_rate = fed_rate_int / 100.0
+
     state_rate_int = st.slider(
         "State supplemental rate (%)",
         min_value=0,
@@ -133,7 +146,7 @@ with st.sidebar:
         step=1,
         format="%d%%",
         help="Combined federal + state at the top of your ordinary bracket. "
-        "If higher than the 22% federal supplemental rate, the vest will be "
+        "If higher than the elected federal supplemental rate, the vest will be "
         "under-withheld and you'll owe more at year-end.",
     )
     marginal_ordinary_rate = marginal_int / 100.0
@@ -166,6 +179,7 @@ inputs = RSUVestInputs(
     shares_vested=int(shares_vested),
     fmv_at_vest_per_share=float(fmv_at_vest),
     vest_date=vest_date,
+    elected_federal_supplemental_rate=elected_federal_supplemental_rate,
     state_supplemental_rate=state_supplemental_rate,
     social_security_rate=0.062,
     medicare_rate=0.0145,

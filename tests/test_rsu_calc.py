@@ -17,6 +17,7 @@ def _default_inputs(**overrides) -> RSUVestInputs:
         shares_vested=1_000,
         fmv_at_vest_per_share=100.0,
         vest_date=date(2026, 6, 15),
+        elected_federal_supplemental_rate=0.22,
         state_supplemental_rate=0.10,
         social_security_rate=0.062,
         medicare_rate=0.0145,
@@ -256,3 +257,58 @@ def test_no_sale_data_leaves_sale_outputs_none():
     assert result.days_from_vest_to_sale is None
     assert result.is_ltcg_at_sale is None
     assert result.capital_gain_or_loss is None
+
+
+# ---------------------------------------------------------------------------
+# Elected federal supplemental rate (employer-permitted enhancement)
+# ---------------------------------------------------------------------------
+
+
+def test_elected_federal_rate_32pct_below_1m():
+    """Employee elects 32% federal — $100K vest × 32% = $32,000."""
+    result = calculate_rsu_vest(_default_inputs(
+        elected_federal_supplemental_rate=0.32,
+    ))
+    assert result.federal_supplemental_wh == pytest.approx(32_000.0)
+    assert result.federal_effective_rate == pytest.approx(0.32)
+    assert not result.federal_crossed_1m_threshold
+
+
+def test_elected_federal_rate_37pct_max():
+    """Employee elects 37% federal — $100K × 37% = $37,000."""
+    result = calculate_rsu_vest(_default_inputs(
+        elected_federal_supplemental_rate=0.37,
+    ))
+    assert result.federal_supplemental_wh == pytest.approx(37_000.0)
+    assert result.federal_effective_rate == pytest.approx(0.37)
+
+
+def test_elected_rate_ignored_when_ytd_already_past_1m():
+    """YTD supplemental already > $1M → mandatory 37%, elected rate ignored."""
+    result = calculate_rsu_vest(_default_inputs(
+        shares_vested=1_000,
+        fmv_at_vest_per_share=100.0,  # $100K vest
+        elected_federal_supplemental_rate=0.25,  # elected 25%
+        ytd_supplemental_wages=1_200_000.0,  # already past $1M
+        ytd_social_security_wages=SOCIAL_SECURITY_WAGE_BASE_2026,
+        ytd_total_wages=1_200_000.0,
+    ))
+    # Entire vest at mandatory 37%
+    assert result.federal_supplemental_wh == pytest.approx(37_000.0)
+    assert result.federal_effective_rate == pytest.approx(0.37)
+
+
+def test_elected_rate_applied_below_1m_then_37pct_above():
+    """YTD $600K + vest $500K = $1.1M. Split: $400K @ elected 30%, $100K @ mandatory 37%."""
+    result = calculate_rsu_vest(_default_inputs(
+        shares_vested=5_000,
+        fmv_at_vest_per_share=100.0,  # $500K vest
+        elected_federal_supplemental_rate=0.30,  # elected 30%
+        ytd_supplemental_wages=600_000.0,
+        ytd_social_security_wages=SOCIAL_SECURITY_WAGE_BASE_2026,
+        ytd_total_wages=600_000.0,
+    ))
+    # $400K × 30% = $120K + $100K × 37% = $37K → total $157K
+    assert result.federal_supplemental_wh == pytest.approx(157_000.0)
+    # Effective rate = $157K / $500K = 31.4%
+    assert result.federal_effective_rate == pytest.approx(0.314)

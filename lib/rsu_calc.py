@@ -53,6 +53,7 @@ class RSUVestInputs:
     vest_date: date
 
     # Withholding rate overrides / defaults
+    elected_federal_supplemental_rate: float  # 0.22 (default) up to 0.37; some employers allow election
     state_supplemental_rate: float  # e.g., 0.10 for 10% (default varies by state)
     social_security_rate: float  # 0.062 (employee share)
     medicare_rate: float  # 0.0145
@@ -139,26 +140,30 @@ def calculate_rsu_vest(inputs: RSUVestInputs) -> RSUVestOutputs:
     ordinary_income = inputs.shares_vested * inputs.fmv_at_vest_per_share
 
     # --- Federal supplemental withholding (§3402(g)) ---
-    # Rate: 22% up to $1M YTD supplemental, 37% above
+    # Below $1M YTD supplemental: employer uses employee-elected rate (22% IRS default,
+    #   some employers allow election up to 37%).
+    # Above $1M YTD supplemental: MANDATORY 37% rate (elected rate is overridden).
+    elected_rate = inputs.elected_federal_supplemental_rate
     ytd_before = inputs.ytd_supplemental_wages
     ytd_after = ytd_before + ordinary_income
     threshold = FEDERAL_SUPPLEMENTAL_THRESHOLD
 
     if ytd_after <= threshold:
-        federal_wh = ordinary_income * FEDERAL_SUPPLEMENTAL_TIER1_RATE
-        federal_effective_rate = FEDERAL_SUPPLEMENTAL_TIER1_RATE
+        # Entire vest below $1M threshold — apply elected rate
+        federal_wh = ordinary_income * elected_rate
+        federal_effective_rate = elected_rate
         federal_crossed_1m = False
     elif ytd_before >= threshold:
+        # Already past $1M — mandatory 37% regardless of election
         federal_wh = ordinary_income * FEDERAL_SUPPLEMENTAL_TIER2_RATE
         federal_effective_rate = FEDERAL_SUPPLEMENTAL_TIER2_RATE
         federal_crossed_1m = True
     else:
-        # Split: portion up to $1M at 22%, portion above at 37%
+        # Split: portion up to $1M at elected rate, portion above at mandatory 37%
         under_1m = threshold - ytd_before
         over_1m = ordinary_income - under_1m
         federal_wh = (
-            under_1m * FEDERAL_SUPPLEMENTAL_TIER1_RATE
-            + over_1m * FEDERAL_SUPPLEMENTAL_TIER2_RATE
+            under_1m * elected_rate + over_1m * FEDERAL_SUPPLEMENTAL_TIER2_RATE
         )
         federal_effective_rate = federal_wh / ordinary_income if ordinary_income > 0 else 0.0
         federal_crossed_1m = True
