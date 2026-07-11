@@ -38,6 +38,12 @@ FEDERAL_SUPPLEMENTAL_THRESHOLD = 1_000_000.0
 ADDITIONAL_MEDICARE_THRESHOLD_SINGLE = 200_000.0
 ADDITIONAL_MEDICARE_THRESHOLD_MFJ = 250_000.0
 
+# §6654 safe harbor (avoids IRS underpayment penalty)
+SAFE_HARBOR_HIGH_INCOME_THRESHOLD = 150_000.0  # $75K if MFS — simplified here
+SAFE_HARBOR_STANDARD_RATE = 1.00  # 100% of prior year tax
+SAFE_HARBOR_HIGH_INCOME_RATE = 1.10  # 110% if prior year AGI > threshold
+DE_MINIMIS_TAX_OWED_THRESHOLD = 1_000.0  # no penalty if < $1000 owed at filing
+
 
 # ---------------------------------------------------------------------------
 # Input + output containers
@@ -261,4 +267,98 @@ def calculate_rsu_vest(inputs: RSUVestInputs) -> RSUVestOutputs:
         days_from_vest_to_sale=days_to_sale,
         is_ltcg_at_sale=is_ltcg,
         capital_gain_or_loss=cap_gain_loss,
+    )
+
+
+# ---------------------------------------------------------------------------
+# §6654 underpayment penalty safe harbor
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SafeHarborInputs:
+    """Inputs for §6654 safe harbor analysis."""
+
+    prior_year_federal_tax: float  # Form 1040 line 24 total tax
+    prior_year_agi_over_threshold: bool  # True if AGI > $150K (or $75K if MFS)
+    projected_total_federal_wh_this_year: float  # includes this vest
+    projected_current_year_tax: Optional[float] = None  # for 90% prong (usually unknown)
+
+
+@dataclass(frozen=True)
+class SafeHarborOutputs:
+    """Safe harbor analysis results."""
+
+    prior_year_threshold: float  # 100% or 110% of prior year tax
+    applicable_prior_year_rate: float  # 1.00 or 1.10
+    current_year_90pct_threshold: Optional[float]  # 90% of projected current year tax
+    applicable_threshold: float  # LESSER of prior year and 90% (whichever is available)
+    is_safe_harbor_met: bool
+    shortfall: float  # amount needed to reach threshold
+    is_de_minimis_exception: bool  # if total tax owed < $1,000
+
+
+def check_underpayment_safe_harbor(inputs: SafeHarborInputs) -> SafeHarborOutputs:
+    """Check IRC §6654 safe harbor for underpayment-penalty avoidance.
+
+    No penalty applies if TOTAL YTD withholding + estimated payments equal or
+    exceed the LESSER of:
+      1. 90% of CURRENT year's tax liability, OR
+      2. 100% of PRIOR year's tax liability (110% if prior year AGI > $150K)
+
+    Also: no penalty if tax owed at filing is < $1,000 (de minimis).
+
+    NOTE: The 90% prong is usually only actionable at year-end when current year
+    tax is known. This tool applies both prongs if projected current year tax is
+    provided; otherwise only the prior year prong.
+    """
+    # Prior year prong (100% or 110%)
+    prior_year_rate = (
+        SAFE_HARBOR_HIGH_INCOME_RATE
+        if inputs.prior_year_agi_over_threshold
+        else SAFE_HARBOR_STANDARD_RATE
+    )
+    prior_year_threshold = inputs.prior_year_federal_tax * prior_year_rate
+
+    # Current year prong (90%, if projection provided)
+    current_year_90pct_threshold: Optional[float] = None
+    if inputs.projected_current_year_tax is not None:
+        current_year_90pct_threshold = inputs.projected_current_year_tax * 0.90
+
+    # Applicable threshold = LESSER of the two prongs (taxpayer picks the easier one)
+    if current_year_90pct_threshold is not None:
+        applicable_threshold = min(prior_year_threshold, current_year_90pct_threshold)
+    else:
+        applicable_threshold = prior_year_threshold
+
+    # De minimis: if projected tax owed < $1,000 no penalty regardless
+    # (Only checkable if projected_current_year_tax is provided.)
+    is_de_minimis = False
+    if inputs.projected_current_year_tax is not None:
+        tax_owed_at_filing = (
+            inputs.projected_current_year_tax
+            - inputs.projected_total_federal_wh_this_year
+        )
+        is_de_minimis = tax_owed_at_filing < DE_MINIMIS_TAX_OWED_THRESHOLD
+
+    # Compare to cent precision to avoid float artifacts (e.g., 50000 × 1.10 = 55000.00000000001)
+    is_met = (
+        round(inputs.projected_total_federal_wh_this_year, 2)
+        >= round(applicable_threshold, 2)
+        or is_de_minimis
+    )
+    shortfall = max(
+        0.0,
+        round(applicable_threshold, 2)
+        - round(inputs.projected_total_federal_wh_this_year, 2),
+    )
+
+    return SafeHarborOutputs(
+        prior_year_threshold=prior_year_threshold,
+        applicable_prior_year_rate=prior_year_rate,
+        current_year_90pct_threshold=current_year_90pct_threshold,
+        applicable_threshold=applicable_threshold,
+        is_safe_harbor_met=is_met,
+        shortfall=shortfall if not is_met else 0.0,
+        is_de_minimis_exception=is_de_minimis,
     )
