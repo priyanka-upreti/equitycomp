@@ -250,10 +250,10 @@ withholding_rows = [
         "Withheld": f"${result.additional_medicare_wh:,.2f}",
     },
     {
-        "Category": "**TOTAL**",
-        "Rate applied": f"**{result.effective_wh_rate * 100:.2f}%**",
+        "Category": "TOTAL",
+        "Rate applied": f"{result.effective_wh_rate * 100:.2f}%",
         "Taxable base": "",
-        "Withheld": f"**${result.total_withholding:,.2f}**",
+        "Withheld": f"${result.total_withholding:,.2f}",
     },
 ]
 st.dataframe(pd.DataFrame(withholding_rows), use_container_width=True, hide_index=True)
@@ -262,21 +262,21 @@ st.dataframe(pd.DataFrame(withholding_rows), use_container_width=True, hide_inde
 threshold_notes = []
 if result.federal_crossed_1m_threshold:
     threshold_notes.append(
-        f"🚨 **$1M federal threshold crossed** — YTD supplemental wages "
-        f"(${ytd_supplemental:,} + this vest ${result.ordinary_income:,.0f}) "
-        f"exceed $1M. Portion above $1M withheld at 37%. Effective federal rate: "
+        f"🚨 **\\$1M federal threshold crossed** — YTD supplemental wages "
+        f"(\\${ytd_supplemental:,} + this vest \\${result.ordinary_income:,.0f}) "
+        f"exceed \\$1M. Portion above \\$1M withheld at 37%. Effective federal rate: "
         f"{result.federal_effective_rate * 100:.2f}%."
     )
 if result.ss_wage_base_capped:
     threshold_notes.append(
         f"ℹ️ **Social Security wage base reached** — only "
-        f"${result.social_security_taxable_wages:,.2f} of this vest subject to SS."
+        f"\\${result.social_security_taxable_wages:,.2f} of this vest subject to SS."
     )
 if result.additional_medicare_taxable_wages > 0:
     threshold_notes.append(
         f"ℹ️ **Additional Medicare threshold crossed** — "
-        f"${result.additional_medicare_taxable_wages:,.2f} subject to 0.9% surcharge "
-        f"(over ${result.additional_medicare_threshold_used:,.0f} for {filing_status.upper()})."
+        f"\\${result.additional_medicare_taxable_wages:,.2f} subject to 0.9% surcharge "
+        f"(over \\${result.additional_medicare_threshold_used:,.0f} for {filing_status.upper()})."
     )
 
 for note in threshold_notes:
@@ -288,10 +288,10 @@ for note in threshold_notes:
 
 if result.is_underwithheld:
     st.error(
-        f"⚠️ **Under-withheld by ${result.underwithheld_amount:,.0f}** — Your marginal "
+        f"⚠️ **Under-withheld by \\${result.underwithheld_amount:,.0f}** — Your marginal "
         f"rate ({marginal_ordinary_rate * 100:.0f}%) exceeds the federal supplemental "
         f"rate applied ({result.federal_effective_rate * 100:.2f}%). You'll owe about "
-        f"**${result.underwithheld_amount:,.0f}** more in federal tax at year-end. "
+        f"**\\${result.underwithheld_amount:,.0f}** more in federal tax at year-end. "
         f"Consider making an estimated tax payment (Form 1040-ES) or increasing W-4 withholding."
     )
 
@@ -317,8 +317,8 @@ with stc_col4:
     )
 
 st.caption(
-    f"**Formula:** shares_sold = ceil(total_withholding / FMV) = "
-    f"ceil(${result.total_withholding:,.2f} / ${fmv_at_vest:,.2f}) = "
+    f"**Formula:** shares sold = ceil(total withholding ÷ FMV at vest) = "
+    f"ceil(\\${result.total_withholding:,.2f} ÷ \\${fmv_at_vest:,.2f}) = "
     f"{result.shares_sold_to_cover:,} shares"
 )
 
@@ -338,8 +338,8 @@ with basis_col3:
     st.metric("Net shares retained", f"{result.net_shares_retained:,}")
 
 st.caption(
-    "Cost basis of retained shares = FMV_at_vest. This becomes the reference point for "
-    "capital gain/loss at future sale. **Broker 1099-B may report $0 basis** — you must "
+    "Cost basis of retained shares = FMV at vest. This becomes the reference point for "
+    "capital gain/loss at future sale. **Broker 1099-B may report \\$0 basis** — you must "
     "adjust to prevent double-taxation."
 )
 
@@ -366,8 +366,9 @@ if result.days_from_vest_to_sale is not None:
         st.metric("Sale proceeds", f"${(sale_price or 0) * result.net_shares_retained:,.2f}")
 
     st.caption(
-        f"**Formula:** ({sale_price:.2f} − {result.cost_basis_per_share:.2f}) × "
-        f"{result.net_shares_retained:,} = ${result.capital_gain_or_loss:,.2f}"
+        f"**Formula:** (sale price − cost basis) × net shares retained = "
+        f"(\\${sale_price:.2f} − \\${result.cost_basis_per_share:.2f}) × "
+        f"{result.net_shares_retained:,} = \\${result.capital_gain_or_loss:,.2f}"
     )
 
 # ---------------------------------------------------------------------------
