@@ -6,9 +6,7 @@ import pytest
 
 from lib.rsu_calc import (
     RSUVestInputs,
-    SafeHarborInputs,
     calculate_rsu_vest,
-    check_underpayment_safe_harbor,
     SOCIAL_SECURITY_WAGE_BASE_2026,
 )
 
@@ -258,85 +256,3 @@ def test_no_sale_data_leaves_sale_outputs_none():
     assert result.days_from_vest_to_sale is None
     assert result.is_ltcg_at_sale is None
     assert result.capital_gain_or_loss is None
-
-
-# ---------------------------------------------------------------------------
-# §6654 safe harbor
-# ---------------------------------------------------------------------------
-
-
-def test_safe_harbor_low_income_100pct_threshold():
-    """AGI ≤ $150K: threshold = 100% of prior year tax."""
-    sh = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=30_000.0,
-            prior_year_agi_over_threshold=False,  # < $150K
-            projected_total_federal_wh_this_year=30_000.0,
-        )
-    )
-    assert sh.applicable_prior_year_rate == pytest.approx(1.00)
-    assert sh.prior_year_threshold == pytest.approx(30_000.0)
-    assert sh.is_safe_harbor_met  # exactly meets threshold
-
-
-def test_safe_harbor_high_income_110pct_threshold():
-    """AGI > $150K: threshold = 110% of prior year tax."""
-    sh = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=50_000.0,
-            prior_year_agi_over_threshold=True,
-            projected_total_federal_wh_this_year=55_000.0,
-        )
-    )
-    # Threshold = 50K × 1.10 = $55K exactly
-    assert sh.applicable_prior_year_rate == pytest.approx(1.10)
-    assert sh.prior_year_threshold == pytest.approx(55_000.0)
-    assert sh.is_safe_harbor_met
-
-
-def test_safe_harbor_shortfall_when_wh_below_threshold():
-    """Under threshold: shortfall = threshold − withholding."""
-    sh = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=50_000.0,
-            prior_year_agi_over_threshold=True,  # 110% × 50K = $55K
-            projected_total_federal_wh_this_year=40_000.0,  # $15K short
-        )
-    )
-    assert not sh.is_safe_harbor_met
-    assert sh.shortfall == pytest.approx(15_000.0)
-
-
-def test_safe_harbor_uses_lesser_of_90pct_or_prior_year():
-    """90% prong: if current year projection is smaller than prior year threshold, use it.
-
-    Prior year tax was $50K (high income → threshold $55K).
-    Current year projection $40K → 90% × $40K = $36K.
-    Lesser of $55K and $36K = $36K. So threshold drops.
-    """
-    sh = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=50_000.0,
-            prior_year_agi_over_threshold=True,
-            projected_total_federal_wh_this_year=37_000.0,
-            projected_current_year_tax=40_000.0,
-        )
-    )
-    assert sh.current_year_90pct_threshold == pytest.approx(36_000.0)
-    assert sh.applicable_threshold == pytest.approx(36_000.0)
-    assert sh.is_safe_harbor_met  # $37K > $36K
-
-
-def test_safe_harbor_de_minimis_under_1000():
-    """Tax owed < $1,000 at filing → no penalty regardless of withholding."""
-    sh = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=100_000.0,
-            prior_year_agi_over_threshold=True,
-            projected_total_federal_wh_this_year=39_500.0,
-            projected_current_year_tax=40_000.0,  # only $500 owed at filing
-        )
-    )
-    # $40K − $39.5K = $500 tax owed → de minimis
-    assert sh.is_de_minimis_exception
-    assert sh.is_safe_harbor_met

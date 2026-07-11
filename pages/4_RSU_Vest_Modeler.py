@@ -21,9 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.rsu_calc import (  # noqa: E402
     RSUVestInputs,
-    SafeHarborInputs,
     calculate_rsu_vest,
-    check_underpayment_safe_harbor,
     SOCIAL_SECURITY_WAGE_BASE_2026,
 )
 
@@ -290,119 +288,11 @@ for note in threshold_notes:
 
 if result.is_underwithheld:
     st.warning(
-        f"💰 **Cash owed at filing: about \\${result.underwithheld_amount:,.0f}** — Your marginal "
+        f"⚠️ **Under-withheld by about \\${result.underwithheld_amount:,.0f}** — Your marginal "
         f"rate ({marginal_ordinary_rate * 100:.0f}%) exceeds the federal supplemental "
-        f"rate applied ({result.federal_effective_rate * 100:.2f}%), so this vest is "
-        f"under-withheld. You'll write a check for the difference at filing. "
-        f"**Whether you also owe a penalty** depends on §6654 safe harbor — check below."
-    )
-
-# ---------------------------------------------------------------------------
-# §6654 Safe Harbor Analysis (optional)
-# ---------------------------------------------------------------------------
-
-st.divider()
-st.header("🛡️ IRC §6654 Safe Harbor — Underpayment Penalty Check")
-
-st.markdown(
-    "**Two different things:**\n"
-    "1. **Cash owed at filing** (above) — you'll always write a check if under-withheld\n"
-    "2. **Underpayment penalty** (this section) — an IRS penalty ON TOP of the cash owed, "
-    "only if you fail the safe harbor test\n\n"
-    "**Safe harbor:** Total federal withholding this year must equal or exceed the "
-    "**LESSER of** (a) 90% of THIS year's tax, or (b) **100% of LAST year's tax** — "
-    "bumped to **110%** if last year's AGI exceeded \\$150,000."
-)
-
-sh_col1, sh_col2 = st.columns(2)
-with sh_col1:
-    prior_year_tax = st.number_input(
-        "Prior year federal tax liability ($)",
-        min_value=0,
-        value=0,
-        step=1_000,
-        help="Total federal tax from last year's Form 1040 line 24. Enter 0 to skip analysis.",
-    )
-    prior_year_high_income = st.checkbox(
-        "Prior year AGI over \\$150,000 (or \\$75K if MFS)?",
-        value=False,
-        help="If yes, safe harbor threshold is 110% of prior year tax instead of 100%.",
-    )
-with sh_col2:
-    projected_ytd_federal_wh = st.number_input(
-        "Projected TOTAL federal WH this year ($)",
-        min_value=0,
-        value=int(result.federal_supplemental_wh),
-        step=1_000,
-        help="All federal income tax withheld this year across ALL sources "
-        "(paycheck W-2, RSU vests, estimated payments) — including this vest.",
-    )
-    projected_current_year_tax = st.number_input(
-        "Projected current year federal tax ($, optional)",
-        min_value=0,
-        value=0,
-        step=1_000,
-        help="If known: enables the 90% prong of the safe harbor test. Leave at 0 to skip.",
-    )
-
-if prior_year_tax > 0:
-    sh_result = check_underpayment_safe_harbor(
-        SafeHarborInputs(
-            prior_year_federal_tax=float(prior_year_tax),
-            prior_year_agi_over_threshold=prior_year_high_income,
-            projected_total_federal_wh_this_year=float(projected_ytd_federal_wh),
-            projected_current_year_tax=(
-                float(projected_current_year_tax) if projected_current_year_tax > 0 else None
-            ),
-        )
-    )
-
-    st.markdown("---")
-    sh_metric_col1, sh_metric_col2, sh_metric_col3 = st.columns(3)
-    with sh_metric_col1:
-        st.metric(
-            f"Prior year threshold ({sh_result.applicable_prior_year_rate * 100:.0f}%)",
-            f"${sh_result.prior_year_threshold:,.0f}",
-        )
-    with sh_metric_col2:
-        if sh_result.current_year_90pct_threshold is not None:
-            st.metric(
-                "Current year threshold (90%)",
-                f"${sh_result.current_year_90pct_threshold:,.0f}",
-            )
-        else:
-            st.metric("Current year threshold (90%)", "N/A")
-    with sh_metric_col3:
-        st.metric(
-            "Applicable threshold (lesser)",
-            f"${sh_result.applicable_threshold:,.0f}",
-        )
-
-    if sh_result.is_safe_harbor_met:
-        if sh_result.is_de_minimis_exception:
-            st.success(
-                f"✅ **Safe harbor MET** — via de minimis exception (tax owed at filing "
-                f"< \\$1,000). No underpayment penalty regardless of withholding."
-            )
-        else:
-            st.success(
-                f"✅ **Safe harbor MET** — projected withholding "
-                f"(\\${projected_ytd_federal_wh:,.0f}) equals or exceeds the applicable "
-                f"threshold (\\${sh_result.applicable_threshold:,.0f}). **No underpayment "
-                f"penalty**, even though you'll owe cash at filing."
-            )
-    else:
-        st.error(
-            f"🚨 **Safe harbor NOT met** — projected withholding "
-            f"(\\${projected_ytd_federal_wh:,.0f}) is **\\${sh_result.shortfall:,.0f} short** "
-            f"of the applicable threshold (\\${sh_result.applicable_threshold:,.0f}). "
-            f"You may owe an underpayment penalty on top of the cash due at filing. "
-            f"Consider making an estimated payment via **Form 1040-ES** or increasing "
-            f"W-4 withholding for the remainder of the year."
-        )
-else:
-    st.caption(
-        "💡 Enter your prior year federal tax liability above to run the safe harbor check."
+        f"rate applied ({result.federal_effective_rate * 100:.2f}%). You'll owe about "
+        f"\\${result.underwithheld_amount:,.0f} more in federal tax at year-end. "
+        f"Consider making an estimated tax payment (Form 1040-ES) or increasing W-4 withholding."
     )
 
 # ---------------------------------------------------------------------------
@@ -498,12 +388,7 @@ with st.expander("📚 Statutory + regulatory references"):
 - **IRC §3121(a)** — Social Security wage base (2026: ${SOCIAL_SECURITY_WAGE_BASE_2026:,.0f})
 - **IRC §3101(b)(2)** — Additional Medicare tax (0.9% over $200K single / $250K MFJ)
 - **§409A** — Deferred compensation rules (RSUs settling later than 2.5 months after year-of-vest can trigger)
-- **IRC §6654** — Underpayment penalty for individuals + SAFE HARBOR rules
-  - §6654(d)(1)(B)(i) — 90% of current year tax
-  - §6654(d)(1)(B)(ii) — 100% of prior year tax (110% if prior year AGI > \\$150K per §6654(d)(1)(C))
-  - §6654(e) — De minimis rule: no penalty if tax owed < \\$1,000
 - **IRS Publication 15 (Circular E) 2026** — Employer's withholding tax guide
-- **IRS Form 2210** — Underpayment of estimated tax by individuals
 - **Form W-2** — Reports RSU ordinary income in Box 1 + withholding in Box 2
 
 ### V1 model simplifications (documented for transparency)
