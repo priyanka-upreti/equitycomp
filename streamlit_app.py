@@ -83,9 +83,9 @@ with col_e:
     st.markdown(
         """
 Track **insider transactions** under SEC §16. Calculates the 2-business-day
-filing deadline + 6-month short-swing exposure window per §16(b).
+Form 4 deadlines + §16(b) short-swing exposure with Rule 16b-3 exemption support.
 
-**Coming soon**
+**Try it →** sidebar: *Section 16 Form 4 Tracker*
 """
     )
 
