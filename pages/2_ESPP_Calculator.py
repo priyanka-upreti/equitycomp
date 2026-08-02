@@ -530,10 +530,21 @@ else:
             "Offering period start date",
             value=date(2024, 1, 1),
         )
+
+        default_purchase_date = generate_purchase_dates(
+            offering_start_date, num_purchases=1, months_between_purchases=6
+        )[0]
+        purchase_date_source = str(offering_start_date)
+        if st.session_state.get("_single_purchase_date_source") != purchase_date_source:
+            st.session_state["single_purchase_date_widget"] = default_purchase_date
+            st.session_state["_single_purchase_date_source"] = purchase_date_source
+
         purchase_date = st.date_input(
             "Purchase date",
-            value=date(2024, 6, 30),
+            value=default_purchase_date,
             min_value=offering_start_date,
+            key="single_purchase_date_widget",
+            help="Defaults to 6 months after offering start. Edit to override.",
         )
 
         seeded_offering_fmv = _seeded_price(offering_start_date)
