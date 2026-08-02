@@ -5,6 +5,10 @@ Two modes:
 - Multi-purchase with auto-reset (large-cap tech style): multiple purchases over a
   2-year offering, cascading anchor reset when FMV drops, per-calendar-year
   §423(b)(8) $25K limit tracking, per-lot QD/DD at sale
+
+Both modes support ticker auto-fill: type a US-listed ticker in the sidebar and
+click "Fetch prices" to pull historical closes from Yahoo Finance and seed every
+FMV field on the current dates.
 """
 
 from datetime import date
@@ -12,7 +16,6 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-# Make lib/ importable regardless of how streamlit launches
 import sys
 from pathlib import Path
 
@@ -57,68 +60,128 @@ st.divider()
 
 
 # ===========================================================================
+# SHARED: Ticker auto-fill UI (top of sidebar, both modes)
+# ===========================================================================
+
+def _clear_ticker_state():
+    """Wipe all ticker-related session state so widgets fully reset on next render."""
+    for k in (
+        "espp_ticker",
+        "espp_ticker_prices",
+        "espp_ticker_error",
+        "espp_ticker_input",
+        "_offering_fmv_source",
+        "_purchase_fmv_source",
+        "_sale_price_source",
+    ):
+        st.session_state.pop(k, None)
+
+
+with st.sidebar:
+    st.header("📈 Auto-fill from ticker (optional)")
+    st.caption(
+        "Enter a US-listed ticker to auto-populate every FMV field from historical "
+        "closing prices. Any auto-filled value can still be edited manually."
+    )
+    ticker_input = st.text_input(
+        "Ticker symbol",
+        key="espp_ticker_input",
+        placeholder="e.g., NVDA, AAPL, GOOGL",
+        help="US-listed public companies only. Private / OTC / delisted tickers won't work.",
+    ).strip().upper()
+
+    fetch_col1, fetch_col2 = st.columns([2, 1])
+    with fetch_col1:
+        fetch_clicked = st.button(
+            "🔍 Fetch prices",
+            type="primary",
+            use_container_width=True,
+            disabled=not ticker_input,
+        )
+    with fetch_col2:
+        st.button(
+            "Clear",
+            use_container_width=True,
+            on_click=_clear_ticker_state,
+        )
+
+    if fetch_clicked and ticker_input:
+        st.session_state["_espp_pending_fetch"] = ticker_input
+
+    st.divider()
+
+
+# Convenience for downstream force-syncing
+prev_prices = st.session_state.get("espp_ticker_prices")
+prev_ticker = st.session_state.get("espp_ticker")
+
+
+def _seeded_price(target_date):
+    """Fetched close on or before target_date, or None if no active ticker fetch."""
+    if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
+        return get_price_on_or_before(prev_prices, target_date)
+    return None
+
+
+def _force_sync_widget(widget_key, source_key, source, seeded_val):
+    """Push seeded_val into st.session_state[widget_key] when the (ticker, date)
+    source changes. Streamlit's `value=` param is only honored on the widget's
+    FIRST render; direct session_state writes are the documented override.
+
+    Only rewrites when the source key differs, so manual user edits persist.
+    """
+    if seeded_val and st.session_state.get(source_key) != source:
+        st.session_state[widget_key] = seeded_val
+        st.session_state[source_key] = source
+
+
+def _resolve_pending_fetch(start_date, end_date):
+    """If a fetch was requested, run it now that we know the date range."""
+    pending = st.session_state.pop("_espp_pending_fetch", None)
+    if not pending:
+        return
+    with st.spinner(f"Fetching {pending} prices from Yahoo Finance..."):
+        try:
+            closes = fetch_close_prices(pending, start_date, end_date)
+            st.session_state["espp_ticker"] = pending
+            st.session_state["espp_ticker_prices"] = closes
+            st.session_state.pop("espp_ticker_error", None)
+            st.rerun()
+        except TickerFetchError as e:
+            st.session_state["espp_ticker_error"] = str(e)
+            st.session_state.pop("espp_ticker_prices", None)
+
+
+def _show_fetch_status():
+    """Render success / error banner for the current fetch state."""
+    if err := st.session_state.get("espp_ticker_error"):
+        st.error(f"⚠️ {err}")
+    elif prev_prices is not None and prev_ticker == ticker_input and ticker_input:
+        st.success(
+            f"✅ Loaded {len(prev_prices)} trading days for **{ticker_input}**. "
+            "FMVs auto-filled from actual closing prices."
+        )
+
+
+# ===========================================================================
 # MULTI-PURCHASE MODE
 # ===========================================================================
 
 if mode_multi:
     with st.sidebar:
-        # ---------- Ticker auto-fill (top of sidebar for visibility) ----------
-        st.header("📈 Auto-fill from ticker (optional)")
-        st.caption(
-            "Enter a US-listed ticker to auto-populate FMVs from historical "
-            "closing prices. Any auto-filled value can still be edited manually."
-        )
-        ticker_input = st.text_input(
-            "Ticker symbol",
-            value=st.session_state.get("espp_ticker", ""),
-            placeholder="e.g., NVDA, AAPL, GOOGL",
-            help="US-listed public companies only. Private / OTC / delisted tickers won't work.",
-        ).strip().upper()
-
-        fetch_col1, fetch_col2 = st.columns([2, 1])
-        with fetch_col1:
-            fetch_clicked = st.button(
-                "🔍 Fetch prices",
-                type="primary",
-                use_container_width=True,
-                disabled=not ticker_input,
-            )
-        with fetch_col2:
-            if st.button("Clear", use_container_width=True):
-                for k in ("espp_ticker", "espp_ticker_prices", "espp_ticker_error"):
-                    st.session_state.pop(k, None)
-                st.rerun()
-
-        st.divider()
-
         st.header("📥 Plan Setup")
         offering_start_date = st.date_input(
             "Offering start date",
             value=date(2024, 1, 1),
         )
 
-        # --- Ticker fetch action (must happen AFTER dates are known below) ---
-        # We defer the actual fetch until we know sale_date; the button click
-        # sets a flag we resolve at the bottom of the sidebar.
-        if fetch_clicked and ticker_input:
-            st.session_state["_espp_pending_fetch"] = ticker_input
-
-        # Look up any previously-fetched prices to seed the FMV default
-        prev_prices = st.session_state.get("espp_ticker_prices")
-        prev_ticker = st.session_state.get("espp_ticker")
-        seeded_offering_fmv: float | None = None
-        if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
-            seeded_offering_fmv = get_price_on_or_before(prev_prices, offering_start_date)
-
-        # Force-sync the widget's stored value whenever the (ticker, offering_date) tuple
-        # changes. st.number_input's `value=` is only honored on the widget's FIRST render;
-        # subsequent renders keep the user-typed value even if `value=` changes. Writing to
-        # st.session_state[key] directly bypasses that behavior.
-        offering_fmv_source = f"{ticker_input}|{offering_start_date}"
-        if seeded_offering_fmv and st.session_state.get("_offering_fmv_source") != offering_fmv_source:
-            st.session_state["offering_start_fmv_widget"] = seeded_offering_fmv
-            st.session_state["_offering_fmv_source"] = offering_fmv_source
-
+        seeded_offering_fmv = _seeded_price(offering_start_date)
+        _force_sync_widget(
+            widget_key="offering_start_fmv_widget",
+            source_key="_offering_fmv_source",
+            source=f"{ticker_input}|{offering_start_date}",
+            seeded_val=seeded_offering_fmv,
+        )
         offering_start_fmv = st.number_input(
             "FMV at offering start (per share)",
             min_value=0.01,
@@ -177,16 +240,13 @@ if mode_multi:
             min_value=offering_start_date,
         )
 
-        seeded_sale_price: float | None = None
-        if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
-            seeded_sale_price = get_price_on_or_before(prev_prices, sale_date)
-
-        # Same force-sync pattern as offering_start_fmv above.
-        sale_price_source = f"{ticker_input}|{sale_date}"
-        if seeded_sale_price and st.session_state.get("_sale_price_source") != sale_price_source:
-            st.session_state["sale_price_widget"] = seeded_sale_price
-            st.session_state["_sale_price_source"] = sale_price_source
-
+        seeded_sale_price = _seeded_price(sale_date)
+        _force_sync_widget(
+            widget_key="sale_price_widget",
+            source_key="_sale_price_source",
+            source=f"{ticker_input}|{sale_date}",
+            seeded_val=seeded_sale_price,
+        )
         sale_price = st.number_input(
             "Sale price (per share)",
             min_value=0.01,
@@ -201,29 +261,8 @@ if mode_multi:
             ),
         )
 
-        # Now we have offering_start_date and sale_date — resolve any pending fetch
-        pending = st.session_state.pop("_espp_pending_fetch", None)
-        if pending:
-            with st.spinner(f"Fetching {pending} prices from Yahoo Finance..."):
-                try:
-                    closes = fetch_close_prices(pending, offering_start_date, sale_date)
-                    st.session_state["espp_ticker"] = pending
-                    st.session_state["espp_ticker_prices"] = closes
-                    st.session_state.pop("espp_ticker_error", None)
-                    st.rerun()
-                except TickerFetchError as e:
-                    st.session_state["espp_ticker_error"] = str(e)
-                    st.session_state.pop("espp_ticker_prices", None)
-
-        # Show fetch status banner
-        if err := st.session_state.get("espp_ticker_error"):
-            st.error(f"⚠️ {err}")
-        elif prev_prices is not None and prev_ticker == ticker_input and ticker_input:
-            n_days = len(prev_prices)
-            st.success(
-                f"✅ Loaded {n_days} trading days for **{ticker_input}**. "
-                "FMVs auto-filled from actual closing prices."
-            )
+        _resolve_pending_fetch(offering_start_date, sale_date)
+        _show_fetch_status()
 
         st.divider()
         st.header("💰 Tax Estimate (optional)")
@@ -240,7 +279,6 @@ if mode_multi:
             horizontal=True,
         )
 
-    # --- Main area: per-purchase data editor ---
     st.header("📝 Per-Purchase Inputs")
     st.caption(
         "Enter the FMV on each purchase date and contributions accumulated for "
@@ -254,7 +292,6 @@ if mode_multi:
         months_between_purchases=months_between,
     )
 
-    # Default FMVs: from fetched ticker data if available, else +5% pattern
     ticker_prices = st.session_state.get("espp_ticker_prices")
     ticker_active = ticker_input and st.session_state.get("espp_ticker") == ticker_input
     if ticker_active and ticker_prices is not None:
@@ -264,7 +301,6 @@ if mode_multi:
             default_fmvs.append(p if p else offering_start_fmv)
     else:
         default_fmvs = [offering_start_fmv * (1.0 + 0.05 * i) for i in range(1, num_purchases + 1)]
-    # Default contributions: $3,000 per period
     default_contribs = [3_000.0 for _ in range(num_purchases)]
 
     default_df = pd.DataFrame({
@@ -290,7 +326,6 @@ if mode_multi:
         key="multi_purchase_inputs",
     )
 
-    # Build PurchaseInput list from edited dataframe
     purchases = [
         PurchaseInput(
             purchase_date=date.fromisoformat(row["Date"]),
@@ -312,7 +347,6 @@ if mode_multi:
     )
     result = calculate_multi_purchase_espp(multi_inputs)
 
-    # --- Historical price chart (when ticker fetched) ---
     if ticker_active and ticker_prices is not None:
         st.divider()
         st.subheader(f"📈 Historical price — {ticker_input}")
@@ -327,7 +361,6 @@ if mode_multi:
             "(or nearest prior trading day)."
         )
 
-    # --- Reset events banner ---
     if result.reset_dates:
         reset_dates_str = ", ".join(d.isoformat() for d in result.reset_dates)
         st.success(
@@ -359,7 +392,6 @@ if mode_multi:
     purchase_df = pd.DataFrame(purchase_table_rows)
     st.dataframe(purchase_df, use_container_width=True, hide_index=True)
 
-    # --- Cumulative summary ---
     sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
     with sum_col1:
         st.metric("Total shares purchased", f"{result.total_shares_purchased:,.2f}")
@@ -370,7 +402,6 @@ if mode_multi:
     with sum_col4:
         st.metric("Total bargain at purchase", f"${result.total_bargain_at_purchase:,.2f}")
 
-    # --- §423(b)(8) per-calendar-year usage ---
     st.divider()
     st.header("📋 §423(b)(8) $25K Annual Limit Usage")
     if result.ytd_fmv_usage:
@@ -391,7 +422,6 @@ if mode_multi:
             f"capped {result.total_shares_purchased:,.2f} shares only."
         )
 
-    # --- Per-lot dispositions ---
     st.divider()
     st.header("📅 Per-Lot Disposition at Sale")
 
@@ -412,7 +442,6 @@ if mode_multi:
     if lot_rows:
         st.dataframe(pd.DataFrame(lot_rows), use_container_width=True, hide_index=True)
 
-    # --- Aggregated tax outcome ---
     st.divider()
     st.header("⚖️ Aggregated Tax Outcome")
 
@@ -431,7 +460,6 @@ if mode_multi:
     with tax_col3:
         st.metric("Total capital loss", f"${result.total_capital_loss:,.2f}")
 
-    # --- "What if" comparison: all QD vs all DD ---
     with st.expander("🔍 What if every lot were QD vs DD? (sensitivity comparison)"):
         what_col1, what_col2 = st.columns(2)
         with what_col1:
@@ -449,7 +477,6 @@ if mode_multi:
                 f"- Capital loss: `${result.dd_total_capital_loss:,.2f}`"
             )
 
-    # --- Federal tax estimate ---
     st.divider()
     st.header("💸 Federal Tax Estimate (planning only)")
     tax = estimate_marginal_federal_tax(
@@ -499,20 +526,58 @@ if mode_multi:
 else:
     with st.sidebar:
         st.header("📥 Plan + Offering")
+        offering_start_date = st.date_input(
+            "Offering period start date",
+            value=date(2024, 1, 1),
+        )
+        purchase_date = st.date_input(
+            "Purchase date",
+            value=date(2024, 6, 30),
+            min_value=offering_start_date,
+        )
+
+        seeded_offering_fmv = _seeded_price(offering_start_date)
+        _force_sync_widget(
+            widget_key="offering_start_fmv_widget",
+            source_key="_offering_fmv_source",
+            source=f"{ticker_input}|{offering_start_date}",
+            seeded_val=seeded_offering_fmv,
+        )
         offering_fmv = st.number_input(
             "FMV at start of offering period (per share, USD)",
             min_value=0.01,
-            value=100.00,
+            value=seeded_offering_fmv if seeded_offering_fmv else 100.00,
             step=0.01,
             format="%.2f",
+            key="offering_start_fmv_widget",
+            help=(
+                f"Auto-filled from {ticker_input} close on or before {offering_start_date}. "
+                "Edit to override."
+                if seeded_offering_fmv else None
+            ),
+        )
+
+        seeded_purchase_fmv = _seeded_price(purchase_date)
+        _force_sync_widget(
+            widget_key="single_purchase_fmv_widget",
+            source_key="_purchase_fmv_source",
+            source=f"{ticker_input}|{purchase_date}",
+            seeded_val=seeded_purchase_fmv,
         )
         purchase_fmv = st.number_input(
             "FMV at purchase date (per share, USD)",
             min_value=0.01,
-            value=150.00,
+            value=seeded_purchase_fmv if seeded_purchase_fmv else 150.00,
             step=0.01,
             format="%.2f",
+            key="single_purchase_fmv_widget",
+            help=(
+                f"Auto-filled from {ticker_input} close on or before {purchase_date}. "
+                "Edit to override."
+                if seeded_purchase_fmv else None
+            ),
         )
+
         _discount_int = st.slider(
             "Discount % (max 15% per §423(b)(6))",
             min_value=0,
@@ -525,18 +590,6 @@ else:
         has_lookback = st.checkbox(
             "Plan has look-back feature",
             value=True,
-        )
-
-        st.divider()
-        st.header("📅 Dates + Contributions")
-        offering_start_date = st.date_input(
-            "Offering period start date",
-            value=date(2024, 1, 1),
-        )
-        purchase_date = st.date_input(
-            "Purchase date",
-            value=date(2024, 6, 30),
-            min_value=offering_start_date,
         )
         contributions = st.number_input(
             "Total contributions during offering ($)",
@@ -553,13 +606,30 @@ else:
             value=date(2027, 1, 1),
             min_value=purchase_date,
         )
+
+        seeded_sale_price = _seeded_price(sale_date)
+        _force_sync_widget(
+            widget_key="sale_price_widget",
+            source_key="_sale_price_source",
+            source=f"{ticker_input}|{sale_date}",
+            seeded_val=seeded_sale_price,
+        )
         sale_price = st.number_input(
             "Sale price (per share, USD)",
             min_value=0.01,
-            value=200.00,
+            value=seeded_sale_price if seeded_sale_price else 200.00,
             step=0.01,
             format="%.2f",
+            key="sale_price_widget",
+            help=(
+                f"Auto-filled from {ticker_input} close on or before {sale_date}. "
+                "Edit to override for a hypothetical sale price."
+                if seeded_sale_price else None
+            ),
         )
+
+        _resolve_pending_fetch(offering_start_date, sale_date)
+        _show_fetch_status()
 
         st.divider()
         st.header("💰 Tax Estimate (optional)")
@@ -588,6 +658,21 @@ else:
         contributions=float(contributions),
     )
     result = calculate_espp_purchase(inputs)
+
+    ticker_prices = st.session_state.get("espp_ticker_prices")
+    ticker_active = ticker_input and st.session_state.get("espp_ticker") == ticker_input
+    if ticker_active and ticker_prices is not None:
+        st.subheader(f"📈 Historical price — {ticker_input}")
+        chart_df = pd.DataFrame({
+            "Date": ticker_prices.index,
+            "Close": ticker_prices.values,
+        }).set_index("Date")
+        st.line_chart(chart_df, use_container_width=True, height=200)
+        st.caption(
+            "Offering start, purchase date, and sale date FMVs in the sidebar are "
+            "pulled from these closing prices (or the nearest prior trading day)."
+        )
+        st.divider()
 
     st.header("📊 At Purchase")
     col1, col2, col3, col4 = st.columns(4)
