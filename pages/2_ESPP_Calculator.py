@@ -86,7 +86,7 @@ with st.sidebar:
     ticker_input = st.text_input(
         "Ticker symbol",
         key="espp_ticker_input",
-        placeholder="e.g., NVDA, AAPL, GOOGL",
+        placeholder="e.g., NVDA, AAPL",
         help="US-listed public companies only. Private / OTC / delisted tickers won't work.",
     ).strip().upper()
 
