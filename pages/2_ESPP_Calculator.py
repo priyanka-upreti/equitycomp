@@ -110,12 +110,22 @@ if mode_multi:
         if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
             seeded_offering_fmv = get_price_on_or_before(prev_prices, offering_start_date)
 
+        # Force-sync the widget's stored value whenever the (ticker, offering_date) tuple
+        # changes. st.number_input's `value=` is only honored on the widget's FIRST render;
+        # subsequent renders keep the user-typed value even if `value=` changes. Writing to
+        # st.session_state[key] directly bypasses that behavior.
+        offering_fmv_source = f"{ticker_input}|{offering_start_date}"
+        if seeded_offering_fmv and st.session_state.get("_offering_fmv_source") != offering_fmv_source:
+            st.session_state["offering_start_fmv_widget"] = seeded_offering_fmv
+            st.session_state["_offering_fmv_source"] = offering_fmv_source
+
         offering_start_fmv = st.number_input(
             "FMV at offering start (per share)",
             min_value=0.01,
             value=seeded_offering_fmv if seeded_offering_fmv else 100.00,
             step=0.01,
             format="%.2f",
+            key="offering_start_fmv_widget",
             help=(
                 f"Auto-filled from {ticker_input} close on or before {offering_start_date}. "
                 "Edit to override."
@@ -171,12 +181,19 @@ if mode_multi:
         if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
             seeded_sale_price = get_price_on_or_before(prev_prices, sale_date)
 
+        # Same force-sync pattern as offering_start_fmv above.
+        sale_price_source = f"{ticker_input}|{sale_date}"
+        if seeded_sale_price and st.session_state.get("_sale_price_source") != sale_price_source:
+            st.session_state["sale_price_widget"] = seeded_sale_price
+            st.session_state["_sale_price_source"] = sale_price_source
+
         sale_price = st.number_input(
             "Sale price (per share)",
             min_value=0.01,
             value=seeded_sale_price if seeded_sale_price else 200.00,
             step=0.01,
             format="%.2f",
+            key="sale_price_widget",
             help=(
                 f"Auto-filled from {ticker_input} close on or before {sale_date}. "
                 "Edit to override for a hypothetical sale price."
