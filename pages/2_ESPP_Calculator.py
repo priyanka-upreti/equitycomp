@@ -27,6 +27,11 @@ from lib.espp_calc import (  # noqa: E402
     estimate_marginal_federal_tax,
     generate_purchase_dates,
 )
+from lib.ticker_data import (  # noqa: E402
+    TickerFetchError,
+    fetch_close_prices,
+    get_price_on_or_before,
+)
 
 
 st.set_page_config(
@@ -57,17 +62,65 @@ st.divider()
 
 if mode_multi:
     with st.sidebar:
+        # ---------- Ticker auto-fill (top of sidebar for visibility) ----------
+        st.header("📈 Auto-fill from ticker (optional)")
+        st.caption(
+            "Enter a US-listed ticker to auto-populate FMVs from historical "
+            "closing prices. Any auto-filled value can still be edited manually."
+        )
+        ticker_input = st.text_input(
+            "Ticker symbol",
+            value=st.session_state.get("espp_ticker", ""),
+            placeholder="e.g., NVDA, AAPL, GOOGL",
+            help="US-listed public companies only. Private / OTC / delisted tickers won't work.",
+        ).strip().upper()
+
+        fetch_col1, fetch_col2 = st.columns([2, 1])
+        with fetch_col1:
+            fetch_clicked = st.button(
+                "🔍 Fetch prices",
+                type="primary",
+                use_container_width=True,
+                disabled=not ticker_input,
+            )
+        with fetch_col2:
+            if st.button("Clear", use_container_width=True):
+                for k in ("espp_ticker", "espp_ticker_prices", "espp_ticker_error"):
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+        st.divider()
+
         st.header("📥 Plan Setup")
         offering_start_date = st.date_input(
             "Offering start date",
             value=date(2024, 1, 1),
         )
+
+        # --- Ticker fetch action (must happen AFTER dates are known below) ---
+        # We defer the actual fetch until we know sale_date; the button click
+        # sets a flag we resolve at the bottom of the sidebar.
+        if fetch_clicked and ticker_input:
+            st.session_state["_espp_pending_fetch"] = ticker_input
+
+        # Look up any previously-fetched prices to seed the FMV default
+        prev_prices = st.session_state.get("espp_ticker_prices")
+        prev_ticker = st.session_state.get("espp_ticker")
+        seeded_offering_fmv: float | None = None
+        if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
+            seeded_offering_fmv = get_price_on_or_before(prev_prices, offering_start_date)
+
         offering_start_fmv = st.number_input(
             "FMV at offering start (per share)",
             min_value=0.01,
-            value=100.00,
+            value=seeded_offering_fmv if seeded_offering_fmv else 100.00,
             step=0.01,
             format="%.2f",
+            help=(
+                f"Auto-filled from {ticker_input} close on or before {offering_start_date}. "
+                "Edit to override."
+                if seeded_offering_fmv else None
+            ),
         )
         _discount_int = st.slider(
             "Discount % (max 15% per §423(b)(6))",
@@ -113,13 +166,47 @@ if mode_multi:
             value=date(2027, 6, 1),
             min_value=offering_start_date,
         )
+
+        seeded_sale_price: float | None = None
+        if prev_prices is not None and prev_ticker == ticker_input and ticker_input:
+            seeded_sale_price = get_price_on_or_before(prev_prices, sale_date)
+
         sale_price = st.number_input(
             "Sale price (per share)",
             min_value=0.01,
-            value=200.00,
+            value=seeded_sale_price if seeded_sale_price else 200.00,
             step=0.01,
             format="%.2f",
+            help=(
+                f"Auto-filled from {ticker_input} close on or before {sale_date}. "
+                "Edit to override for a hypothetical sale price."
+                if seeded_sale_price else None
+            ),
         )
+
+        # Now we have offering_start_date and sale_date — resolve any pending fetch
+        pending = st.session_state.pop("_espp_pending_fetch", None)
+        if pending:
+            with st.spinner(f"Fetching {pending} prices from Yahoo Finance..."):
+                try:
+                    closes = fetch_close_prices(pending, offering_start_date, sale_date)
+                    st.session_state["espp_ticker"] = pending
+                    st.session_state["espp_ticker_prices"] = closes
+                    st.session_state.pop("espp_ticker_error", None)
+                    st.rerun()
+                except TickerFetchError as e:
+                    st.session_state["espp_ticker_error"] = str(e)
+                    st.session_state.pop("espp_ticker_prices", None)
+
+        # Show fetch status banner
+        if err := st.session_state.get("espp_ticker_error"):
+            st.error(f"⚠️ {err}")
+        elif prev_prices is not None and prev_ticker == ticker_input and ticker_input:
+            n_days = len(prev_prices)
+            st.success(
+                f"✅ Loaded {n_days} trading days for **{ticker_input}**. "
+                "FMVs auto-filled from actual closing prices."
+            )
 
         st.divider()
         st.header("💰 Tax Estimate (optional)")
@@ -150,8 +237,16 @@ if mode_multi:
         months_between_purchases=months_between,
     )
 
-    # Default FMV pattern: appreciate +5% per purchase
-    default_fmvs = [offering_start_fmv * (1.0 + 0.05 * i) for i in range(1, num_purchases + 1)]
+    # Default FMVs: from fetched ticker data if available, else +5% pattern
+    ticker_prices = st.session_state.get("espp_ticker_prices")
+    ticker_active = ticker_input and st.session_state.get("espp_ticker") == ticker_input
+    if ticker_active and ticker_prices is not None:
+        default_fmvs = []
+        for pd_ in purchase_dates:
+            p = get_price_on_or_before(ticker_prices, pd_)
+            default_fmvs.append(p if p else offering_start_fmv)
+    else:
+        default_fmvs = [offering_start_fmv * (1.0 + 0.05 * i) for i in range(1, num_purchases + 1)]
     # Default contributions: $3,000 per period
     default_contribs = [3_000.0 for _ in range(num_purchases)]
 
@@ -199,6 +294,21 @@ if mode_multi:
         sale_price=float(sale_price),
     )
     result = calculate_multi_purchase_espp(multi_inputs)
+
+    # --- Historical price chart (when ticker fetched) ---
+    if ticker_active and ticker_prices is not None:
+        st.divider()
+        st.subheader(f"📈 Historical price — {ticker_input}")
+        chart_df = pd.DataFrame({
+            "Date": ticker_prices.index,
+            "Close": ticker_prices.values,
+        }).set_index("Date")
+        st.line_chart(chart_df, use_container_width=True, height=200)
+        st.caption(
+            "Purchase dates are highlighted in the table above. "
+            "Auto-populated FMVs are the closing price on each purchase date "
+            "(or nearest prior trading day)."
+        )
 
     # --- Reset events banner ---
     if result.reset_dates:
