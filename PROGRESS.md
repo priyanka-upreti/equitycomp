@@ -5,9 +5,12 @@
 
 ---
 
-## 🎉 STATUS: SHIPPED (2026-07-10)
+## 🎉 STATUS: SHIPPED (2026-07-10) · Module 6 added 2026-09-10
 
-All 5 planned modules are live in production. Project 1 is **complete** and ready to demo at the SCU CEPI Symposium (2026-07-21).
+All 5 originally planned modules shipped 2026-07-10 and were demoed at the SCU CEPI
+Symposium (2026-07-21). **Module 6 (Rule 701 Sizing Calculator)** was added 2026-09-10 —
+the first securities-law-sizing module, extending coverage from tax mechanics into
+private-company 1933 Act compliance.
 
 ---
 
@@ -15,9 +18,9 @@ All 5 planned modules are live in production. Project 1 is **complete** and read
 
 | Metric | Value |
 |---|---|
-| **Modules complete** | 5 of 5 |
-| **Total unit tests** | 79 passing |
-| **Lines of code** | ~5,500 |
+| **Modules complete** | 6 |
+| **Total unit tests** | 98 passing |
+| **Lines of code** | ~6,200 |
 | **Public URL** | https://equitycomp.streamlit.app |
 | **Source repo** | https://github.com/priyanka-upreti/equitycomp |
 | **License** | MIT |
@@ -34,7 +37,8 @@ All 5 planned modules are live in production. Project 1 is **complete** and read
 | 3 | ✍️ **§83(b) Decision Tool** | [/Section_83b_Decision_Tool](https://equitycomp.streamlit.app/Section_83b_Decision_Tool) | 9 | Tax PPT 02 + 05 |
 | 4 | 📅 **RSU Vest + Sell-to-Cover** | [/RSU_Vest_Modeler](https://equitycomp.streamlit.app/RSU_Vest_Modeler) | 19 | Tax PPT 05 + EPD&A PPT 02 |
 | 5 | 🛡️ **§16 Form 4 Tracker** | [/Section_16_Form_4_Tracker](https://equitycomp.streamlit.app/Section_16_Form_4_Tracker) | 23 | Law PPT 02 + 07 |
-| — | | **TOTAL** | **79** | |
+| 6 | 📐 **Rule 701 Sizing Calculator** | [/Rule_701_Sizing_Calculator](https://equitycomp.streamlit.app/Rule_701_Sizing_Calculator) | 19 | SOB Ch. 8.2-8.3; Securities_Law_Reference.pdf |
+| — | | **TOTAL** | **98** | |
 
 ---
 
@@ -195,3 +199,57 @@ Copy any of these into her resume verbatim:
 Project 1 is DONE. Moving to:
 - **Project 2:** Equity Comp Coach (AI chatbot) — target July 2026 per LinkedIn About commitment
 - **Project 3:** ASC 718 Expense Engine — target August 2026
+
+
+---
+
+## Module 6: Rule 701 Sizing Calculator
+
+**Added:** 2026-09-10
+
+**Coverage:** Sizes a private company's Rule 701 capacity for compensatory equity issuances
+under the Securities Act of 1933. First module in the project covering securities-law
+sizing rather than individual tax mechanics.
+
+**What it models:**
+
+- **Availability gate (Rule 701(b))** — the exemption is unavailable to Exchange Act
+  reporting companies, which must use Form S-8 instead. The page hard-stops in that case.
+- **12-month cap (Rule 701(d)(2))** — greatest of $1,000,000; 15% of total assets; or 15%
+  of the outstanding amount of the class. Tests (i) and (ii) are dollar-denominated and
+  (iii) is share-denominated, and because the rule reads *aggregate sales price* **or**
+  *amount of securities*, either test can carry a window. The tool reports which one does.
+- **Rolling-window testing** — the rule tests **any consecutive 12-month period**, not the
+  calendar year. A window is evaluated ending at every issuance date plus the user's
+  measurement date. A plan can pass a calendar-year test and still breach a rolling window;
+  there is a unit test for exactly that case.
+- **Option valuation at grant (Rule 701(d)(3)(ii))** — options count on the **exercise
+  price at the time of grant**, not at exercise and not at FMV. This is the mechanic most
+  people get wrong, and it means a grant consumes capacity permanently whether or not it
+  is ever exercised.
+- **$10M enhanced disclosure (Rule 701(e))** — flags the trigger, the window that first
+  crossed it, and the overage. Threshold was raised from $5M by the Economic Growth,
+  Regulatory Relief and Consumer Protection Act of 2018.
+- **Headroom helper** — how many additional option shares could be granted today at a given
+  exercise price before the more permissive test is exhausted.
+- **Balance-sheet staleness warning** — both percentage tests are measured at the most
+  recent annual balance sheet date.
+
+**Deliberately not modeled** (documented in-app and in the module docstring):
+
+- State Blue Sky compliance. Rule 701 is a *federal* exemption only; NSMIA does not preempt
+  state law for private-company issuances.
+- Rule 144 resale mechanics for the resulting restricted securities.
+- Consultant/advisor eligibility beyond the natural-person test.
+- RSU valuation convention is grant-date FMV. The rule text addresses options and
+  deferred-compensation elections expressly but not RSUs, and practitioners differ — flagged
+  in-app as a point to confirm with counsel.
+
+**Statutory references:** Securities Act of 1933 §3(b); Rule 701(b), (c), (d)(2),
+(d)(3)(ii), (e), (g); Form S-8; Rule 144.
+
+**Tests:** 19 — capacity sizing (floor vs asset test), option/RSU/RSA valuation bases,
+dual-unit cap where the share test rescues a dollar-cap breach, breach requiring both tests
+to fail, rolling-window breach a calendar-year test would miss, issuance aging out of the
+window, disclosure trigger above/below/exactly at $10M, reporting-company gate, Blue Sky
+warning presence, stale balance sheet, and the headroom helper.

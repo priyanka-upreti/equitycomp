@@ -16,10 +16,11 @@ A multi-module interactive web app that helps employees + practitioners understa
 | Module | What it calculates | IRC / ASC reference |
 |---|---|---|
 | **ISO Exercise Modeler** | AMT preference, dual basis (regular vs AMT), QD vs DD outcomes at sale | IRC §422, §56(b)(3), §1.421-1 |
-| **ESPP Calculator** _(in progress)_ | Look-back math, $25K limit, QD lesser-of formula, DD treatment | IRC §423(b)(1)–(8) |
-| **§83(b) Decision Tool** _(in progress)_ | Net tax savings vs forfeiture risk; generates sample election letter | IRC §83(b) |
-| **RSU Vest + Sell-to-Cover** _(in progress)_ | Net shares retained, withholding rates, cost basis tracking | §409A short-term deferral; ASU 2016-09 |
-| **§16 Form 4 Tracker** _(in progress)_ | 2-business-day deadline + short-swing exposure window | SEC §16(a), §16(b); SOX §403 |
+| **ESPP Calculator** | Look-back math, $25K limit, cascading anchor reset, QD lesser-of formula, DD treatment. Auto-fills FMVs from a ticker symbol. | IRC §423(b)(1)–(8), §423(c) |
+| **§83(b) Decision Tool** | Net tax savings vs forfeiture risk, breakeven forfeit probability, Form 15620 filing procedure | IRC §83(b); Form 15620 |
+| **RSU Vest + Sell-to-Cover** | Net shares retained, withholding rates, cost basis tracking | §409A short-term deferral; ASU 2016-09 |
+| **§16 Form 4 Tracker** | 2-business-day deadline + short-swing exposure window | SEC §16(a), §16(b); SOX §403 |
+| **Rule 701 Sizing Calculator** | 12-month cap (greatest of $1M / 15% assets / 15% outstanding), rolling-window testing, $10M enhanced-disclosure trigger | Securities Act §3(b); Rule 701(b)–(e) |
 
 ## Why this exists
 
