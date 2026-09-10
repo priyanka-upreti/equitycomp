@@ -90,6 +90,22 @@ Form 4 deadlines + §16(b) short-swing exposure with Rule 16b-3 exemption suppor
     )
 
 with col_f:
+    st.markdown("### 📐 Rule 701 Sizing Calculator")
+    st.markdown(
+        """
+Size a **private company's** Rule 701 capacity for compensatory equity. Tests the
+12-month cap across every rolling window, counts options at grant on the exercise
+price, and flags the $10M disclosure trigger.
+
+**Try it →** sidebar: *Rule 701 Sizing Calculator*
+"""
+    )
+
+st.write("")  # vertical spacer between rows
+
+col_g, col_h, col_i = st.columns(3)
+
+with col_g:
     st.markdown("### 💡 Suggest a Tool")
     st.markdown(
         """
