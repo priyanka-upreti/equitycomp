@@ -137,9 +137,16 @@ def test_within_25k_limit():
 def test_no_lookback_offering_above_purchase():
     """No-look-back plan: discount applies to purchase FMV only.
 
-    Corner case: offering FMV ($80) > purchase price ($90).
-    The §423(c)(1) prong is NEGATIVE → ordinary income at QD is $0.
-    QD becomes MORE favorable than expected (all gain is LTCG).
+    Corner case: offering FMV ($80) is BELOW the actual purchase price ($90),
+    because the stock rose during the offering and there is no look-back.
+
+    Even here the §423(c)(2) limb is measured at GRANT. The option price is not
+    determinable at grant (it depends on the purchase-date FMV), so it is
+    "determined as if the option had been exercised at such time" = 90% × $80 =
+    $72. The limb is $80 − $72 = $8/share — not $80 − $90 = −$10.
+
+    Under the correct reading the limb can never be negative, because it is the
+    excess of grant FMV over a price that is by construction a discount to it.
     """
     inputs = ESPPInputs(
         offering_start_fmv=80.0,
@@ -159,13 +166,13 @@ def test_no_lookback_offering_above_purchase():
     assert result.shares_purchased == pytest.approx(10.0)
 
     # QD ordinary income: lesser of
-    #   (1) $80 - $90 = -$10 → clamped to $0
-    #   (2) $150 - $90 = $60 × 10 = $600
-    # → $0 (the offering-side prong wins because it's <= 0)
+    #   §423(c)(2) grant side: $80 − (90% × $80 = $72) = $8/share → $80 total
+    #   §423(c)(1) sale side:  $150 − $90 = $60/share → $600 total
+    # → $80 (the grant-side limb caps it)
     assert result.disposition == "QD"
-    assert result.qd_ordinary_income == pytest.approx(0.0)
-    # All $600 of gain is LTCG
-    assert result.qd_capital_gain == pytest.approx(600.0)
+    assert result.qd_ordinary_income == pytest.approx(80.0)
+    # Capital gain = $1,500 proceeds − ($900 paid + $80 ordinary) = $520 LTCG
+    assert result.qd_capital_gain == pytest.approx(520.0)
 
 
 def test_qd_sale_below_purchase_price():
@@ -194,8 +201,15 @@ def test_qd_sale_below_purchase_price():
 def test_lookback_with_depreciation_during_offering():
     """Stock dropped during offering — look-back picks the lower purchase FMV.
 
-    Critical test: §423(c)(1) = offering_fmv - purchase_price ($49) is LARGER than
-    the naive "offering FMV × discount" ($15). Confirms we use the correct formula.
+    This is the case that matters most, and the one an earlier version of this
+    test got wrong. The look-back cuts the actual purchase price to $51, but the
+    §423(c)(2) limb does NOT follow it down: the option price is "determined as
+    if the option had been exercised at" the grant date, so it is 85% × $100 =
+    $85 and the limb is a flat $15/share.
+
+    Using the actual price here (giving $100 − $51 = $49) overstates ordinary
+    income by more than 3×, and is the mechanic behind the "a qualifying
+    disposition can cost more than a disqualifying one" result in a down market.
     """
     inputs = ESPPInputs(
         offering_start_fmv=100.0,
@@ -216,13 +230,13 @@ def test_lookback_with_depreciation_during_offering():
     assert result.shares_purchased == pytest.approx(10.0)
 
     # QD ordinary income: lesser of
-    #   (1) $100 - $51 = $49/share → $490 total  ← NOT $15 × 10 = $150
-    #   (2) $200 - $51 = $149/share → $1490 total
-    # → $490
+    #   §423(c)(2) grant side: $100 − (85% × $100 = $85) = $15/share → $150 total
+    #   §423(c)(1) sale side:  $200 − $51 = $149/share → $1,490 total
+    # → $150 (the grant-side limb caps it, frozen at the offering date)
     assert result.disposition == "QD"
-    assert result.qd_ordinary_income == pytest.approx(490.0)
-    # Capital gain = $200 × 10 - $51 × 10 - $490 = $2000 - $510 - $490 = $1000
-    assert result.qd_capital_gain == pytest.approx(1000.0)
+    assert result.qd_ordinary_income == pytest.approx(150.0)
+    # Capital gain = $2,000 proceeds − ($510 paid + $150 ordinary) = $1,340 LTCG
+    assert result.qd_capital_gain == pytest.approx(1340.0)
 
 
 def test_holding_period_exact_one_year_boundary():
@@ -597,3 +611,105 @@ def test_multi_purchase_n1_matches_single_purchase_qd():
     assert multi_result.total_capital_gain == pytest.approx(
         single_result.qd_capital_gain
     )
+
+
+# ---------------------------------------------------------------------------
+# §423(c) grant-side limb — regression suite
+#
+# These four scenarios are the worked examples published in "Equity Comp
+# Gotchas" Issue 5 (GPS Exhibits 8-3 to 8-6). They exist to pin the §423(c)(2)
+# grant-side limb, which an earlier implementation computed as
+# (offering_fmv − actual purchase price). That is only correct when the stock
+# rose during the offering; in a down market the look-back cuts the real price
+# while the statutory limb stays frozen at the grant date, and the old formula
+# overstated qualifying-disposition ordinary income.
+# ---------------------------------------------------------------------------
+
+
+def _gps_scenario(purchase_fmv: float, sale_price: float):
+    """Shared GPS setup: offering FMV $10.00, 15% discount, look-back, 1 share."""
+    price = 0.85 * min(10.00, purchase_fmv)
+    return calculate_espp_purchase(
+        ESPPInputs(
+            offering_start_fmv=10.00,
+            purchase_fmv=purchase_fmv,
+            discount_pct=0.15,
+            has_lookback=True,
+            offering_start_date=date(2024, 1, 1),
+            purchase_date=date(2024, 6, 30),
+            sale_date=date(2027, 1, 1),  # comfortably a QD
+            sale_price=sale_price,
+            contributions=price,  # exactly 1 share → outputs are per-share
+        )
+    )
+
+
+def test_gps_scenario_1_up_market_gain():
+    r = _gps_scenario(purchase_fmv=12.00, sale_price=15.00)
+    assert r.purchase_price_per_share == pytest.approx(8.50)
+    assert r.qd_ordinary_income == pytest.approx(1.50)
+    assert r.qd_capital_gain == pytest.approx(5.00)
+    assert r.dd_ordinary_income == pytest.approx(3.50)
+    assert r.dd_capital_gain == pytest.approx(3.00)
+
+
+def test_gps_scenario_2_up_market_loss():
+    """DD taxes the full purchase-date bargain even though the sale was a loss."""
+    r = _gps_scenario(purchase_fmv=12.00, sale_price=5.00)
+    assert r.qd_ordinary_income == pytest.approx(0.00)
+    assert r.qd_capital_loss == pytest.approx(3.50)
+    assert r.dd_ordinary_income == pytest.approx(3.50)
+    assert r.dd_capital_loss == pytest.approx(7.00)
+
+
+def test_gps_scenario_3_down_market_gain_qd_exceeds_dd():
+    """The inversion: QD ordinary income ($1.50) EXCEEDS DD ordinary income ($1.20).
+
+    The look-back drops the purchase price to $6.80, shrinking the DD bargain
+    element to $1.20 — while the §423(c)(2) limb stays frozen at 15% of the
+    $10.00 offering FMV. Total gain is $2.20 either way.
+    """
+    r = _gps_scenario(purchase_fmv=8.00, sale_price=9.00)
+    assert r.purchase_price_per_share == pytest.approx(6.80)
+    assert r.qd_ordinary_income == pytest.approx(1.50)
+    assert r.qd_capital_gain == pytest.approx(0.70)
+    assert r.dd_ordinary_income == pytest.approx(1.20)
+    assert r.dd_capital_gain == pytest.approx(1.00)
+    # The headline claim of the article
+    assert r.qd_ordinary_income > r.dd_ordinary_income
+    # Same total gain under either characterisation
+    assert r.qd_ordinary_income + r.qd_capital_gain == pytest.approx(
+        r.dd_ordinary_income + r.dd_capital_gain
+    )
+
+
+def test_gps_scenario_4_down_market_loss():
+    r = _gps_scenario(purchase_fmv=8.00, sale_price=5.00)
+    assert r.qd_ordinary_income == pytest.approx(0.00)
+    assert r.qd_capital_loss == pytest.approx(1.80)
+    assert r.dd_ordinary_income == pytest.approx(1.20)
+    assert r.dd_capital_loss == pytest.approx(3.00)
+
+
+def test_grant_side_limb_is_never_negative():
+    """Structural property: §423(c)(2) = discount% × grant FMV, so it can't go negative.
+
+    An earlier implementation computed (offering_fmv − actual price), which went
+    negative whenever the purchase price exceeded the offering FMV and was then
+    clamped to zero — wrongly zeroing out ordinary income entirely.
+    """
+    r = calculate_espp_purchase(
+        ESPPInputs(
+            offering_start_fmv=80.0,
+            purchase_fmv=100.0,
+            discount_pct=0.10,
+            has_lookback=False,  # price follows the higher purchase FMV
+            offering_start_date=date(2022, 1, 1),
+            purchase_date=date(2022, 6, 30),
+            sale_date=date(2025, 8, 1),
+            sale_price=150.0,
+            contributions=90.0,  # 1 share at $90
+        )
+    )
+    assert r.purchase_price_per_share == pytest.approx(90.0)  # above offering FMV
+    assert r.qd_ordinary_income == pytest.approx(8.0)  # 10% × $80, not $0

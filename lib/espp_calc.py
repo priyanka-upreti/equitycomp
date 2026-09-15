@@ -9,7 +9,7 @@ Key concepts:
   purchase-date FMV (a powerful benefit during stock appreciation)
 - $25,000 annual limit (§423(b)(8)): measured by offering-date FMV (not purchase)
 - Qualifying Disposition (QD): hold > 2 yrs from offering AND > 1 yr from purchase
-  → ordinary income = lesser of (offering FMV − purchase price) or (sale price − purchase price)
+  → ordinary income = lesser of (offering FMV × discount %) or (sale price − purchase price)
     per IRC §423(c)
   → capital gain on remainder = LTCG (always, since 1-yr-from-purchase requirement is met)
 - Disqualifying Disposition (DD): violates either holding period
@@ -154,22 +154,31 @@ def calculate_espp_purchase(inputs: ESPPInputs) -> ESPPOutputs:
             )
 
     # --- QD outcome — IRC §423(c) lesser-of formula ---
-    # Per §423(c):
-    #   (1) offering_start_fmv − purchase_price       (the "phantom" bargain at offering)
-    #   (2) sale_price − purchase_price                (the actual realized gain)
-    # Ordinary income = max(0, lesser of the two)
-    # NOTE: When stock APPRECIATED during the offering and look-back applies,
-    #   (1) simplifies to offering_fmv × discount_pct.
-    # When stock DEPRECIATED during the offering, (1) is LARGER than that —
-    #   this is a common edge case the user-facing tool must handle correctly.
-    qd_oi_offering_side = inputs.offering_start_fmv - purchase_price  # §423(c)(1)
-    qd_oi_sale_side = inputs.sale_price - purchase_price  # §423(c)(2)
+    # Ordinary income = max(0, lesser of):
+    #   §423(c)(1): FMV at disposition − amount actually paid
+    #   §423(c)(2): FMV at grant (offering date) − the option price
+    #
+    # The subtlety is in §423(c)'s closing sentence: "if the option price is not
+    # fixed or determinable at the time the option is granted, the option price
+    # shall be determined as if the option had been exercised at such time."
+    #
+    # A look-back price (85% of the lesser of offering/purchase FMV) is NOT
+    # determinable at grant, so limb (2) uses the HYPOTHETICAL grant-date price —
+    # 85% of the offering FMV — not the price actually paid. Limb (2) therefore
+    # collapses to offering_fmv × discount_pct and is FROZEN at the offering date.
+    #
+    # This only diverges from (offering_fmv − actual price) when the stock FELL
+    # during the offering: the look-back cuts the real price, but limb (2) does
+    # not move. Using the actual price there overstates QD ordinary income.
+    hypothetical_grant_price = inputs.offering_start_fmv * (1.0 - inputs.discount_pct)
+    qd_oi_grant_side = inputs.offering_start_fmv - hypothetical_grant_price  # §423(c)(2)
+    qd_oi_sale_side = inputs.sale_price - purchase_price  # §423(c)(1)
 
     if inputs.sale_price <= purchase_price:
         # Sold at or below purchase price — no economic gain, no ordinary income at QD
         qd_ordinary = 0.0
     else:
-        qd_ordinary_per_share = max(0.0, min(qd_oi_offering_side, qd_oi_sale_side))
+        qd_ordinary_per_share = max(0.0, min(qd_oi_grant_side, qd_oi_sale_side))
         qd_ordinary = qd_ordinary_per_share * shares
 
     # Total capital gain/loss after ordinary income absorption
@@ -559,13 +568,19 @@ def calculate_multi_purchase_espp(inputs: ESPPMultiInputs) -> ESPPMultiOutputs:
         is_qd = holds_2yr and holds_1yr
 
         # QD math (always compute for "what if" comparison)
-        qd_oi_offering = pe.effective_anchor_fmv - pe.purchase_price
+        # §423(c)(2) uses the option price "determined as if the option had been
+        # exercised at" the grant date — for a look-back plan that is the
+        # hypothetical price at this lot's effective anchor date, so the limb
+        # collapses to anchor_fmv × discount_pct and is frozen at that anchor.
+        # See the single-purchase path for the full explanation.
+        lot_hypothetical_price = pe.effective_anchor_fmv * (1.0 - inputs.discount_pct)
+        qd_oi_grant = pe.effective_anchor_fmv - lot_hypothetical_price
         qd_oi_sale = inputs.sale_price - pe.purchase_price
         if inputs.sale_price <= pe.purchase_price:
             lot_qd_ordinary = 0.0
         else:
             lot_qd_ordinary = (
-                max(0.0, min(qd_oi_offering, qd_oi_sale)) * pe.shares_purchased
+                max(0.0, min(qd_oi_grant, qd_oi_sale)) * pe.shares_purchased
             )
         qd_proceeds = inputs.sale_price * pe.shares_purchased
         qd_basis = (pe.purchase_price * pe.shares_purchased) + lot_qd_ordinary
